@@ -1,0 +1,114 @@
+# {%governanceFile%} — Master Governance Rules
+> **Workspace**: {%workspaceName%} | **Generated**: {%generatedDate%} | **Status**: active
+> Loaded every session. Keep lean. Move details to skills or rules files.
+
+---
+
+## Workflow Rules
+
+**Approval-first, always.**
+Plan work and get explicit approval before executing. No speculative actions.
+If scope changes mid-task, pause and re-confirm.
+
+**If it's not on disk, it didn't happen.**
+Save findings immediately, not at session end. Flush {%flushCadence%}.
+Write corrections to durable locations before applying them.
+{%#if hasSubagents%}Subagents return file paths, not raw data.{%/if%}
+
+**Quality > context cleanliness > speed > token cost.**
+Quality failures require full rework (100% waste). Never trade quality for tokens.
+{%#if isResearch%}
+**Research-specific:**
+- Cite sources for every claim — no unsourced assertions
+- Write findings to file immediately, not at session end
+- Separate facts from interpretation in all output
+{%/if%}
+{%#if isContent%}
+**Content-specific:**
+- Every piece of content follows the draft → review → approve cycle
+- Never publish or finalize without explicit approval
+- Track all revision feedback in a dedicated file
+{%/if%}
+{%#if isDataProcessing%}
+**Data processing-specific:**
+- Define batch size before starting — never process unbounded sets
+- Validate schema on every write
+- Log every transformation step for auditability
+{%/if%}
+
+---
+
+## Persistence Hierarchy
+
+From most ephemeral to most durable:
+
+| Layer | Location | Loaded When |
+|-------|----------|-------------|
+| Conversation | (in-context) | Always — volatile |
+| Temp files | `tmp/` | Per-task, gitignored |
+{%#if sessionHandoff%}| Memory | `{%systemDir%}/memory/` | On demand |
+{%/if%}| Skills | `{%systemDir%}/skills/*/SKILL.md` | When triggered |
+| Rules | `{%systemDir%}/rules/*.md` | Every session |
+| **{%governanceFile%}** | `./{%governanceFile%}` | **Every session** |
+
+---
+
+## Context Discipline
+
+- Flush working state to file {%flushCadence%}
+{%#if hasSubagents%}- Subagents write output to `tmp/{task}/{name}.json`; return one-line receipt
+- Main session reads subagent files ONLY if needed for the next step
+- Never hold raw batch results in conversation — write to disk first
+{%/if%}- Before batch work: write execution plan to file (survives context loss)
+
+---
+{%#if sessionHandoff%}
+## Session Handoff Checklist
+
+Run this at every session end (mandatory, not optional):
+
+1. Save all work to SSOT files
+2. Sync derived files (rebuild from SSOTs)
+3. SSOT integrity check (no duplicates, no stale data)
+4. Update progress tracker
+5. Write next-session plan (with pre-execution hooks listed)
+6. Launch QC on work done this session
+
+---
+{%/if%}
+
+## Security Rules
+
+- Never read `.env` files or echo credentials
+- Never install third-party MCP servers/plugins without explicit approval
+- Never write outside this workspace root — use project-local `tmp/`, not system `/tmp/`
+- Approved tools only — ask before using new tools/APIs
+
+---
+
+## Quality Rules
+{%#if isProductionQuality%}
+- QC is a structural gate, not an optional post-step
+- Run spot-checks after every 5 items in batch work (Ralph Loop)
+- Combined agents (extract + classify) beat split agents on quality
+- Disagreements between agents reveal ambiguity — escalate, don't suppress
+{%/if%}
+{%#if hasQualityGates%}
+{%#unless isProductionQuality%}- QC is a structural gate, not an optional post-step
+- Run QC checkpoints at regular intervals during batch work
+- All results must be reviewed before being marked complete
+{%/unless%}
+{%/if%}
+{%#unless hasQualityGates%}- Run a quick check before finishing any task
+- Review outputs before marking work complete
+{%/unless%}
+
+---
+
+## Pointers to Other Layers
+
+- Rules: `{%systemDir%}/rules/` — domain-specific rules loaded every session
+- Skills: `{%systemDir%}/skills/SKILL_REGISTRY.md` — index of all skills
+{%#if hasSubagents%}- Agents: `{%systemDir%}/agents/` — subagent definitions with governance baked in
+{%/if%}- Gotchas: `{%systemDir%}/gotcha-log.md` — incident log (why rules exist)
+- Future: `{%systemDir%}/future-considerations.md` — deferred ideas

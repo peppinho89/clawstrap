@@ -1,0 +1,86 @@
+# Process: [Project Name]
+> Workflow, hooks, and session checklist for this project.
+> Update this file as the workflow evolves.
+
+---
+{%#if sessionHandoff%}
+## Session Start Checklist (Pre-Hooks)
+
+Run these at the start of every session on this project:
+
+1. [ ] Read `README.md` — confirm current status and next step
+2. [ ] Read `{%governanceFile%}` (auto-loaded, but confirm it's current)
+3. [ ] Check `tmp/{task}/plan.md` if a batch is in progress
+4. [ ] Confirm SSOT files are in expected state (no stale data)
+
+---
+
+## Session End Checklist (Post-Hooks)
+
+Run these at the end of every session (mandatory — not optional):
+
+1. [ ] Save all work to SSOT files
+2. [ ] Sync derived files (regenerate from SSOTs)
+3. [ ] SSOT integrity check (no duplicates, no stale data)
+4. [ ] Update `README.md` → "Last done" and "Next" fields
+5. [ ] Write next-session plan to `tmp/{task}/plan.md`
+6. [ ] Run QC on work done this session
+
+---
+{%/if%}
+
+## Execution Workflow
+
+*(Describe the main execution loop for this project's primary task)*
+{%#if isResearch%}
+```
+1. Define research question → get approval
+2. Gather sources → write findings to file immediately
+3. Synthesize → cite all sources
+4. QC gate: {%flushCadence%}
+5. Output: artifacts/{topic}/synthesis.md
+```
+{%/if%}
+{%#if isContent%}
+```
+1. Brief → get approval on scope and outline
+2. Draft → write to artifacts/
+3. Review → collect feedback in dedicated file
+4. Revise → approval required before finalizing
+5. QC gate: {%flushCadence%}
+```
+{%/if%}
+{%#if isDataProcessing%}
+```
+1. Plan → get approval → define batch size
+2. Process batch → validate schema on every write
+3. QC gate: {%flushCadence%} (Ralph Loop)
+4. Output: tmp/{task}/{name}.json
+5. Human review → finalize
+```
+{%/if%}
+{%#if isCustom%}
+```
+1. Plan → get approval → execute
+2. Batch size: [N items per batch]
+3. QC gate: {%flushCadence%}
+4. Output: tmp/{task}/{name}.json
+```
+{%/if%}
+
+---
+{%#if hasQualityGates%}
+## Active Batch Tracking
+
+| Batch | Status | QC Grade | Notes |
+|-------|--------|----------|-------|
+| *(none yet)* | — | — | — |
+
+---
+{%/if%}
+
+## Known Gotchas (Project-Specific)
+
+*(1-2 line summaries of project-specific failure modes)*
+
+*(None yet — add entries as issues arise)*

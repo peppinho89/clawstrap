@@ -1,0 +1,50 @@
+# Rule: Context Discipline
+> **Scope**: All sessions | **Generated**: {%generatedDate%}
+
+## Flush Cadence
+
+Flush working state to file {%flushCadence%}:
+- Write current state to a context checkpoint file
+- Include: what's done, what's next, accumulated results
+- Path: `context/checkpoint-{date}-{task}.md`
+{%#if hasSubagents%}
+
+## Subagent Output Rules
+
+Subagents MUST:
+1. Write all output to `tmp/{task}/{name}.json` (or `.md`)
+2. Return a one-line receipt: `"Done. N items. File: {path}. Summary: {1 line}."`
+3. NOT dump raw results into the conversation
+
+Main session MUST:
+- Only read the subagent file if needed for the NEXT step
+- Never hold subagent output in conversation memory
+
+## Thin Orchestrator Principle
+
+During batch work, the main session is an orchestrator only:
+
+**DO**:
+- Track queue / done / next
+- Launch agents with correct prompts
+- Check output files for completeness
+- Update SSOT data files
+- Run QC gates
+
+**DO NOT**:
+- Read raw extraction data into main context
+- Classify results (agents do that)
+- Hold full subagent output in conversation
+{%/if%}
+
+## Before Batch Work
+
+Always write an execution plan to `tmp/{task}/plan.md` before starting.
+This file must survive context loss and be readable by any future session.
+
+## On User Correction
+
+1. FIRST write the correction to its durable home (memory/rule/skill file)
+2. THEN apply the correction to current work
+
+This ensures the learning persists even if the session ends unexpectedly.

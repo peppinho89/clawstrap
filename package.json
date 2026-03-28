@@ -1,0 +1,45 @@
+{
+  "name": "clawstrap",
+  "version": "1.0.0",
+  "description": "Scaffold a production-ready AI agent workspace in under 2 minutes",
+  "type": "module",
+  "bin": {
+    "clawstrap": "./dist/index.cjs"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "scaffold",
+    "cli",
+    "claude",
+    "workspace",
+    "governance"
+  ],
+  "author": "Giuseppe Pace",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
+    "commander": "^13.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
