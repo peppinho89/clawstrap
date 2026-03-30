@@ -1,0 +1,10 @@
+#!/bin/bash
+# Import this Clawstrap governance template into Paperclip
+# Requires: Paperclip running at localhost:3100 (default) or PAPERCLIP_URL env var
+
+PAPERCLIP_URL=${PAPERCLIP_URL:-http://localhost:3100}
+
+echo "Importing Clawstrap governance template into Paperclip..."
+npx paperclipai company import --from . --url "$PAPERCLIP_URL"
+
+echo "Done. Open your Paperclip dashboard to review the imported company."

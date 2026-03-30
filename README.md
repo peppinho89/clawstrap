@@ -149,13 +149,32 @@ Every rule in a Clawstrap workspace exists because something went wrong without 
 ## Commands
 
 ```
-clawstrap init [directory]         Scaffold a new workspace (interactive)
-clawstrap init [directory] --yes   Use defaults, skip prompts
-clawstrap add agent <name>         Add a new agent definition
-clawstrap add skill <name>         Add a new skill with SKILL.md
-clawstrap add project <name>       Add a new project with README + process.md
-clawstrap status                   Show workspace configuration and structure
+clawstrap init [directory]                    Scaffold a new workspace (interactive)
+clawstrap init [directory] --yes              Use defaults, skip prompts
+clawstrap add agent <name>                    Add a new agent definition
+clawstrap add skill <name>                    Add a new skill with SKILL.md
+clawstrap add project <name>                  Add a new project with README + process.md
+clawstrap status                              Show workspace configuration and structure
+clawstrap export --format paperclip           Export workspace as Paperclip company template
 ```
+
+## Export to Paperclip
+
+Translate your Clawstrap workspace into a [Paperclip](https://github.com/paperclipai/paperclip) company template. Agents, governance rules, skills, and projects are mapped to Paperclip's format automatically.
+
+```bash
+clawstrap export --format paperclip --name "My Company" --mission "Ship reliable AI"
+```
+
+Generates a directory with `paperclip.manifest.json`, agent definitions with frontmatter, governance rules, and a one-command `import.sh` for Paperclip import. No running Paperclip instance required — it's a pure file transformation.
+
+| Flag | Description |
+|------|-------------|
+| `--format`, `-f` | Export format (required, currently: `paperclip`) |
+| `--out`, `-o` | Output directory (default: `{workspace}-paperclip/`) |
+| `--name`, `-n` | Company name |
+| `--mission`, `-m` | Company mission statement |
+| `--adapter`, `-a` | Agent adapter type (default: `claude_local`) |
 
 ## Flags
 
@@ -170,9 +189,9 @@ clawstrap status                   Show workspace configuration and structure
 | Version | Status | What |
 |---------|--------|------|
 | **v1.0** | Done | `init` command, 4 workspace profiles, full governance templates, `--yes` mode |
-| **v1.1** | **Now** | `add agent`, `add skill`, `add project`, `status` commands |
-| **v1.2** | Next | `upgrade` — merge latest templates without overwriting customizations |
-| **v2.0** | Planned | Multi-model support, generic agent system scaffolding |
+| **v1.1** | Done | `add agent`, `add skill`, `add project`, `status` commands |
+| **v1.2** | **Now** | `export --format paperclip` — Paperclip company template export |
+| **v2.0** | Planned | Multi-model support, `upgrade` command, ClipMart publishing |
 
 ## Contributing
 

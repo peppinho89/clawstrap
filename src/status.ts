@@ -62,5 +62,14 @@ export async function showStatus(): Promise<void> {
   console.log(`  Skills:   ${skillCount} (${systemDir}/skills/)`);
   console.log(`  Projects: ${projectCount} (projects/)`);
   console.log(`  Rules:    ${ruleCount} (${systemDir}/rules/)`);
+
+  if (config.lastExport) {
+    const exportDate = config.lastExport.exportedAt.split("T")[0];
+    console.log(`\nLast Export:`);
+    console.log(`  Format:    ${config.lastExport.format}`);
+    console.log(`  Date:      ${exportDate}`);
+    console.log(`  Output:    ${config.lastExport.outputDir}`);
+  }
+
   console.log();
 }
