@@ -151,13 +151,17 @@ Every rule in a Clawstrap workspace exists because something went wrong without 
 ```
 clawstrap init [directory]         Scaffold a new workspace (interactive)
 clawstrap init [directory] --yes   Use defaults, skip prompts
+clawstrap add agent <name>         Add a new agent definition
+clawstrap add skill <name>         Add a new skill with SKILL.md
+clawstrap add project <name>       Add a new project with README + process.md
+clawstrap status                   Show workspace configuration and structure
 ```
 
 ## Flags
 
 | Flag | Description |
 |------|-------------|
-| `--yes`, `-y` | Skip prompts, use sensible defaults |
+| `--yes`, `-y` | Skip prompts, use sensible defaults (init only) |
 | `--version` | Show version |
 | `--help` | Show help |
 
@@ -165,9 +169,9 @@ clawstrap init [directory] --yes   Use defaults, skip prompts
 
 | Version | Status | What |
 |---------|--------|------|
-| **v1.0** | **Now** | `init` command, 4 workspace profiles, full governance templates, `--yes` mode |
-| **v1.1** | Next | `add agent`, `add skill`, `add project`, `status` commands |
-| **v1.2** | Planned | `upgrade` — merge latest templates without overwriting customizations |
+| **v1.0** | Done | `init` command, 4 workspace profiles, full governance templates, `--yes` mode |
+| **v1.1** | **Now** | `add agent`, `add skill`, `add project`, `status` commands |
+| **v1.2** | Next | `upgrade` — merge latest templates without overwriting customizations |
 | **v2.0** | Planned | Multi-model support, generic agent system scaffolding |
 
 ## Contributing

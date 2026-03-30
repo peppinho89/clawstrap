@@ -29,6 +29,14 @@ import memoryIndex from "./memory/MEMORY.md.tmpl";
 import projectReadme from "./projects/project-readme.md.tmpl";
 // @ts-expect-error .tmpl files imported as text via tsup loader
 import projectProcess from "./projects/project-process.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import newAgent from "./agents/new-agent.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import newSkill from "./skills/new-skill.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import addProjectReadme from "./projects/add-project-readme.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import addProjectProcess from "./projects/add-project-process.md.tmpl";
 
 export const templates: Record<string, string> = {
   governanceFile,
@@ -46,4 +54,8 @@ export const templates: Record<string, string> = {
   memoryIndex,
   projectReadme,
   projectProcess,
+  newAgent,
+  newSkill,
+  addProjectReadme,
+  addProjectProcess,
 };
