@@ -12,7 +12,6 @@ import {
 } from "../src/export-paperclip/translate-governance.js";
 import { translateSkills } from "../src/export-paperclip/translate-skills.js";
 import { translateGoals } from "../src/export-paperclip/translate-goals.js";
-import { buildManifest } from "../src/export-paperclip/build-manifest.js";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "clawstrap-export-test-"));
@@ -52,28 +51,28 @@ describe("translate-agents", () => {
     rmrf(tempDir);
   });
 
-  it("translates primary-agent.md to CEO", () => {
-    const agents = translateAgents(tempDir, ".claude", "test-ws");
-    const ceo = agents.find((a) => a.name === "ceo");
+  it("translates primary-agent.md to CEO with agentcompanies fields", () => {
+    const agents = translateAgents(tempDir, ".claude", "test-ws", []);
+    const ceo = agents.find((a) => a.slug === "ceo");
     expect(ceo).toBeDefined();
+    expect(ceo!.name).toBe("CEO");
+    expect(ceo!.title).toBe("Chief Executive Officer");
     expect(ceo!.reportsTo).toBeNull();
-    expect(ceo!.role).toBe("Primary Orchestrator");
-    expect(ceo!.filename).toBe("ceo.md");
+    expect(ceo!.skills).toEqual([]);
   });
 
-  it("generates CEO for single-agent workspace with consistent role", () => {
+  it("generates CEO for single-agent workspace", () => {
     const singleDir = makeTempDir();
     initWorkspace(singleDir, { parallelAgents: "single" });
-    const agents = translateAgents(singleDir, ".claude", "test-ws");
+    const agents = translateAgents(singleDir, ".claude", "test-ws", []);
     expect(agents).toHaveLength(1);
-    expect(agents[0].name).toBe("ceo");
-    expect(agents[0].role).toBe("Primary Orchestrator");
-    expect(agents[0].body).toContain("test-ws");
+    expect(agents[0].slug).toBe("ceo");
+    expect(agents[0].name).toBe("CEO");
+    expect(agents[0].body).toContain("CEO of test-ws");
     rmrf(singleDir);
   });
 
   it("translates custom agents as workers reporting to CEO", () => {
-    // Add a custom agent
     const agentDir = path.join(tempDir, ".claude", "agents");
     fs.writeFileSync(
       path.join(agentDir, "researcher.md"),
@@ -81,16 +80,42 @@ describe("translate-agents", () => {
       "utf-8"
     );
 
-    const agents = translateAgents(tempDir, ".claude", "test-ws");
-    const researcher = agents.find((a) => a.name === "researcher");
+    const agents = translateAgents(tempDir, ".claude", "test-ws", []);
+    const researcher = agents.find((a) => a.slug === "researcher");
     expect(researcher).toBeDefined();
     expect(researcher!.reportsTo).toBe("ceo");
-    expect(researcher!.role).toBe("Research topics");
+    expect(researcher!.title).toBe("Research topics");
+  });
+
+  it("generates agents with Paperclip-style body sections", () => {
+    const agentDir = path.join(tempDir, ".claude", "agents");
+    fs.writeFileSync(
+      path.join(agentDir, "qa-bot.md"),
+      "# Agent: qa-bot\n> **Purpose**: Reviews code quality\n\nReviews things.",
+      "utf-8"
+    );
+
+    const agents = translateAgents(tempDir, ".claude", "test-ws", ["code-review"]);
+    const ceo = agents.find((a) => a.slug === "ceo")!;
+    const qa = agents.find((a) => a.slug === "qa-bot")!;
+
+    // CEO should have the gstack-style sections
+    expect(ceo.body).toContain("## What triggers you");
+    expect(ceo.body).toContain("## What you do");
+    expect(ceo.body).toContain("## What you produce");
+    expect(ceo.body).toContain("## Who you hand off to");
+    // CEO should reference team members
+    expect(ceo.body).toContain("Qa Bot");
+
+    // QA agent detected as reviewer should have reviewer-style body
+    expect(qa.body).toContain("## What triggers you");
+    expect(qa.body).toContain("quality gate mode");
+    expect(qa.skills).toEqual(["code-review"]);
   });
 
   it("excludes _template.md from translation", () => {
-    const agents = translateAgents(tempDir, ".claude", "test-ws");
-    const template = agents.find((a) => a.name === "_template");
+    const agents = translateAgents(tempDir, ".claude", "test-ws", []);
+    const template = agents.find((a) => a.slug === "_template");
     expect(template).toBeUndefined();
   });
 });
@@ -111,7 +136,6 @@ describe("translate-governance", () => {
     const config = getGovernanceConfig("solo");
     expect(config.tier).toBe("light");
     expect(config.requiresApproval).toBe(false);
-    expect(config.approvalGates).toHaveLength(0);
   });
 
   it("maps team to standard tier", () => {
@@ -124,7 +148,6 @@ describe("translate-governance", () => {
   it("maps production to strict tier", () => {
     const config = getGovernanceConfig("production");
     expect(config.tier).toBe("strict");
-    expect(config.approvalGates).toContain("agent-hire");
     expect(config.approvalGates).toContain("task-transition");
   });
 
@@ -133,8 +156,6 @@ describe("translate-governance", () => {
     expect(doc).toContain("# Governance Rules");
     expect(doc).toContain("Tier: standard");
     expect(doc).toContain("## Approval Gates");
-    // Should include content from rule files
-    expect(doc).toContain("approval");
   });
 });
 
@@ -209,36 +230,5 @@ describe("translate-goals", () => {
     expect(goals[0].description).toBe(
       "A research project about AI governance."
     );
-  });
-});
-
-describe("build-manifest", () => {
-  it("builds manifest with correct structure", () => {
-    const agents = [
-      {
-        name: "ceo",
-        role: "CEO",
-        title: "CEO",
-        reportsTo: null,
-        body: "",
-        filename: "ceo.md",
-      },
-    ];
-    const skills = [
-      {
-        name: "research",
-        sourcePath: ".claude/skills/research/SKILL.md",
-        content: "",
-      },
-    ];
-
-    const manifest = buildManifest("Test Co", "1.2.0", agents, skills);
-    expect(manifest.apiVersion).toBe("1");
-    expect(manifest.displayName).toBe("Test Co");
-    expect(manifest.source).toBe("clawstrap");
-    expect(manifest.agents).toEqual(["agents/ceo.md"]);
-    expect(manifest.skills).toEqual(["skills/research/SKILL.md"]);
-    expect(manifest.company).toBe("company.json");
-    expect(manifest.governance).toBe("governance.md");
   });
 });

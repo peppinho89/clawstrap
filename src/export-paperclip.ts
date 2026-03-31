@@ -5,11 +5,9 @@ import { loadWorkspace } from "./load-workspace.js";
 import { translateAgents } from "./export-paperclip/translate-agents.js";
 import {
   getGovernanceConfig,
-  buildGovernanceDoc,
 } from "./export-paperclip/translate-governance.js";
 import { translateSkills } from "./export-paperclip/translate-skills.js";
 import { translateGoals } from "./export-paperclip/translate-goals.js";
-import { buildManifest } from "./export-paperclip/build-manifest.js";
 
 export const CLI_VERSION = "1.2.0";
 
@@ -22,10 +20,13 @@ export interface ExportOptions {
   validate?: boolean;
 }
 
+function toSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 export async function exportPaperclip(options: ExportOptions): Promise<void> {
   const { config, vars, rootDir } = loadWorkspace();
   const systemDir = String(vars.systemDir);
-  const adapterType = options.adapter ?? "claude_local";
   const validateOnly = options.validate ?? false;
 
   // Determine company name and mission
@@ -43,10 +44,42 @@ export async function exportPaperclip(options: ExportOptions): Promise<void> {
       default: `Governed AI workspace for ${String(vars.workloadLabel).toLowerCase()}`,
     }));
 
+  const companySlug = toSlug(companyName);
+
   // Output directory
   const outDir = path.resolve(
     options.out ?? `${config.workspaceName}-paperclip`
   );
+
+  // Translate workspace components
+  const skills = translateSkills(rootDir, systemDir);
+  const skillSlugs = skills.map((s) => s.name);
+  const agents = translateAgents(rootDir, systemDir, companyName, skillSlugs);
+  const govConfig = getGovernanceConfig(config.qualityLevel);
+  const goals = translateGoals(rootDir);
+  const nonCeoAgents = agents.filter((a) => a.slug !== "ceo");
+
+  // Validate-only mode
+  if (validateOnly) {
+    console.log("\nValidating Paperclip export...\n");
+    console.log("  \u2713 COMPANY.md            valid");
+    console.log("  \u2713 .paperclip.yaml       valid");
+    for (const agent of agents) {
+      console.log(`  \u2713 agents/${agent.slug}/AGENTS.md  valid`);
+    }
+    if (nonCeoAgents.length > 0) {
+      console.log("  \u2713 teams/engineering/TEAM.md  valid");
+    }
+    for (const skill of skills) {
+      console.log(`  \u2713 skills/${skill.name}/SKILL.md  valid`);
+    }
+    console.log(
+      `\n${agents.length} agent(s), ${skills.length} skill(s), ${goals.length} goal(s)`
+    );
+    console.log(`Governance tier: ${govConfig.tier}`);
+    console.log("\nValidation passed. Run without --validate to export.\n");
+    return;
+  }
 
   // Re-export check
   if (fs.existsSync(outDir)) {
@@ -61,112 +94,113 @@ export async function exportPaperclip(options: ExportOptions): Promise<void> {
     fs.rmSync(outDir, { recursive: true, force: true });
   }
 
-  console.log("\nExporting to Paperclip format...\n");
+  console.log("\nExporting to Paperclip format (agentcompanies/v1)...\n");
 
-  // Translate workspace components
-  const agents = translateAgents(rootDir, systemDir, config.workspaceName);
-  const govConfig = getGovernanceConfig(config.qualityLevel);
-  const governanceDoc = buildGovernanceDoc(
-    rootDir,
-    systemDir,
-    config.qualityLevel
-  );
-  const skills = translateSkills(rootDir, systemDir);
-  const goals = translateGoals(rootDir);
-  const manifest = buildManifest(
-    companyName,
-    CLI_VERSION,
-    agents,
-    skills
-  );
+  // Create output directory
+  fs.mkdirSync(outDir, { recursive: true });
 
-  // Validate-only mode: print summary and exit
-  if (validateOnly) {
-    console.log(`  \u2713 company.json          valid`);
-    console.log(
-      `  \u2713 governance.md         valid (tier: ${govConfig.tier})`
-    );
-    for (const agent of agents) {
-      console.log(`  \u2713 agents/${agent.filename}  valid`);
-    }
-    for (const skill of skills) {
-      console.log(
-        `  \u2713 skills/${skill.name}/SKILL.md  valid`
-      );
-    }
-    console.log(`  \u2713 goals/README.md       valid (${goals.length} goal(s))`);
-    console.log(
-      `\n${agents.length} agent(s), ${skills.length} skill(s), ${goals.length} goal(s)`
-    );
-    console.log(`Governance tier: ${govConfig.tier}`);
-    console.log("\nValidation passed. Run without --validate to export.\n");
-    return;
-  }
+  // 1. COMPANY.md
+  const goalsYaml = goals.length > 0
+    ? goals.map((g) => `  - ${g.description.split("\n")[0]}`).join("\n")
+    : `  - ${mission}`;
 
-  // Create output directory structure
-  fs.mkdirSync(path.join(outDir, "agents"), { recursive: true });
-  fs.mkdirSync(path.join(outDir, "goals"), { recursive: true });
+  // Build pipeline description (numbered, like gstack)
+  const pipelineLines = agents.map((a, i) => {
+    return `${i + 1}. **${a.name}** ${a.title.toLowerCase()}`;
+  });
 
-  // Write manifest
+  const companyMd = [
+    "---",
+    `name: ${companyName}`,
+    `description: ${mission}`,
+    `slug: ${companySlug}`,
+    `schema: agentcompanies/v1`,
+    `version: 1.0.0`,
+    `license: MIT`,
+    `authors:`,
+    `  - name: Clawstrap Export`,
+    `goals:`,
+    goalsYaml,
+    "---",
+    "",
+    `${companyName} is a governed AI company with built-in quality gates, approval workflows, and file-first persistence. Every agent operates under structural governance — no unsupervised work, no lost context between sessions.`,
+    "",
+    ...pipelineLines,
+    "",
+    `The philosophy: plan before building, review before shipping, persist everything to disk. Governance tier: **${govConfig.tier}** — quality checks every ${govConfig.qualityCheckInterval} tasks, minimum grade ${govConfig.minQualityGrade}.`,
+    "",
+    "---",
+    "",
+    `Generated with [Clawstrap](https://github.com/peppinho89/clawstrap) v${CLI_VERSION}`,
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(outDir, "COMPANY.md"), companyMd, "utf-8");
+  console.log("  \u2713 COMPANY.md");
+
+  // 2. .paperclip.yaml
   fs.writeFileSync(
-    path.join(outDir, "paperclip.manifest.json"),
-    JSON.stringify(manifest, null, 2) + "\n",
+    path.join(outDir, ".paperclip.yaml"),
+    "schema: paperclip/v1\n",
     "utf-8"
   );
-  console.log("  \u2713 paperclip.manifest.json");
+  console.log("  \u2713 .paperclip.yaml");
 
-  // Write company.json
-  const company = {
-    name: companyName,
-    mission,
-    governance: {
-      tier: govConfig.tier,
-      requiresApproval: govConfig.requiresApproval,
-      approvalGates: govConfig.approvalGates,
-      qualityCheckInterval: govConfig.qualityCheckInterval,
-      minQualityGrade: govConfig.minQualityGrade,
-    },
-    heartbeat: {
-      defaultIntervalSec: 300,
-      persistState: true,
-    },
-  };
-  fs.writeFileSync(
-    path.join(outDir, "company.json"),
-    JSON.stringify(company, null, 2) + "\n",
-    "utf-8"
-  );
-  console.log("  \u2713 company.json");
-
-  // Write governance.md
-  fs.writeFileSync(path.join(outDir, "governance.md"), governanceDoc, "utf-8");
-  console.log("  \u2713 governance.md");
-
-  // Write agent files with frontmatter
+  // 3. Agents — agents/{slug}/AGENTS.md
   for (const agent of agents) {
-    const frontmatter = [
+    const agentDir = path.join(outDir, "agents", agent.slug);
+    fs.mkdirSync(agentDir, { recursive: true });
+
+    const frontmatterLines = [
       "---",
       `name: ${agent.name}`,
-      `role: "${agent.role}"`,
       `title: ${agent.title}`,
-      `adapterType: ${adapterType}`,
-      `heartbeatEnabled: true`,
-      `heartbeatIntervalSec: 300`,
       `reportsTo: ${agent.reportsTo ?? "null"}`,
-      `status: active`,
+    ];
+
+    if (agent.skills.length > 0) {
+      frontmatterLines.push("skills:");
+      for (const s of agent.skills) {
+        frontmatterLines.push(`  - ${s}`);
+      }
+    }
+
+    frontmatterLines.push("---");
+
+    const agentMd = frontmatterLines.join("\n") + "\n\n" + agent.body + "\n";
+    fs.writeFileSync(path.join(agentDir, "AGENTS.md"), agentMd, "utf-8");
+    console.log(`  \u2713 agents/${agent.slug}/AGENTS.md`);
+  }
+
+  // 4. Team — teams/engineering/TEAM.md (if there are non-CEO agents)
+  if (nonCeoAgents.length > 0) {
+    const teamDir = path.join(outDir, "teams", "engineering");
+    fs.mkdirSync(teamDir, { recursive: true });
+
+    const includesList = nonCeoAgents
+      .map((a) => `  - ../../agents/${a.slug}/AGENTS.md`)
+      .join("\n");
+
+    const teamMd = [
       "---",
+      `name: Engineering`,
+      `description: ${companyName} engineering team`,
+      `slug: engineering`,
+      `manager: ../../agents/ceo/AGENTS.md`,
+      `includes:`,
+      includesList,
+      `tags:`,
+      `  - engineering`,
+      "---",
+      "",
+      `The engineering team at ${companyName}. Led by the CEO, who scopes and delegates work to specialists.`,
       "",
     ].join("\n");
 
-    fs.writeFileSync(
-      path.join(outDir, "agents", agent.filename),
-      frontmatter + agent.body,
-      "utf-8"
-    );
-    console.log(`  \u2713 agents/${agent.filename}`);
+    fs.writeFileSync(path.join(teamDir, "TEAM.md"), teamMd, "utf-8");
+    console.log("  \u2713 teams/engineering/TEAM.md");
   }
 
-  // Write skills
+  // 5. Skills — skills/{slug}/SKILL.md
   for (const skill of skills) {
     const skillDir = path.join(outDir, "skills", skill.name);
     fs.mkdirSync(skillDir, { recursive: true });
@@ -174,34 +208,18 @@ export async function exportPaperclip(options: ExportOptions): Promise<void> {
     console.log(`  \u2713 skills/${skill.name}/SKILL.md`);
   }
 
-  // Write goals
-  let goalsContent = "";
-  if (goals.length === 0) {
-    goalsContent = "*(No projects found in workspace)*";
-  } else {
-    goalsContent = goals
-      .map((g) => `## ${g.name}\n\n${g.description}`)
-      .join("\n\n---\n\n");
-  }
-  fs.writeFileSync(
-    path.join(outDir, "goals", "README.md"),
-    `# Goals \u2014 ${companyName}\n> Derived from Clawstrap workspace projects.\n\n${goalsContent}\n`,
-    "utf-8"
-  );
-  console.log("  \u2713 goals/README.md");
-
-  // Write import.sh
+  // 6. import.sh
   const importScript = [
     "#!/bin/bash",
-    "# Import this Clawstrap governance template into Paperclip",
+    "# Import this Clawstrap company into Paperclip",
     "# Requires: Paperclip running at localhost:3100 (default) or PAPERCLIP_URL env var",
     "",
     'PAPERCLIP_URL=${PAPERCLIP_URL:-http://localhost:3100}',
     "",
-    'echo "Importing Clawstrap governance template into Paperclip..."',
-    'npx paperclipai company import --from . --url "$PAPERCLIP_URL"',
+    'echo "Importing into Paperclip..."',
+    'npx paperclipai company import . --paperclip-url "$PAPERCLIP_URL" --yes',
     "",
-    'echo "Done. Open your Paperclip dashboard to review the imported company."',
+    'echo "Done. Open your Paperclip dashboard to review."',
     "",
   ].join("\n");
   const importPath = path.join(outDir, "import.sh");
@@ -209,7 +227,7 @@ export async function exportPaperclip(options: ExportOptions): Promise<void> {
   fs.chmodSync(importPath, 0o755);
   console.log("  \u2713 import.sh");
 
-  // Update .clawstrap.json with export metadata
+  // Update .clawstrap.json
   const updatedConfig = {
     ...config,
     lastExport: {
@@ -230,7 +248,5 @@ export async function exportPaperclip(options: ExportOptions): Promise<void> {
   console.log(
     `${agents.length} agent(s), ${skills.length} skill(s), ${goals.length} goal(s)`
   );
-  console.log(
-    `Governance tier: ${govConfig.tier}\n`
-  );
+  console.log(`Governance tier: ${govConfig.tier}\n`);
 }
