@@ -10,6 +10,14 @@ export const WORKLOAD_TYPES = [
 export const PARALLEL_AGENTS = ["single", "small-team", "production"] as const;
 export const QUALITY_LEVELS = ["solo", "team", "production"] as const;
 
+export const LastExportSchema = z
+  .object({
+    format: z.string(),
+    exportedAt: z.string(),
+    outputDir: z.string(),
+  })
+  .optional();
+
 export const ClawstrapConfigSchema = z.object({
   version: z.string().default("1.0.0"),
   createdAt: z.string(),
@@ -20,6 +28,7 @@ export const ClawstrapConfigSchema = z.object({
   parallelAgents: z.enum(PARALLEL_AGENTS),
   qualityLevel: z.enum(QUALITY_LEVELS),
   sessionHandoff: z.boolean(),
+  lastExport: LastExportSchema,
 });
 
 export type ClawstrapConfig = z.infer<typeof ClawstrapConfigSchema>;

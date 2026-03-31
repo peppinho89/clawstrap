@@ -4,13 +4,14 @@ import { addAgent } from "./add-agent.js";
 import { addSkill } from "./add-skill.js";
 import { addProject } from "./add-project.js";
 import { showStatus } from "./status.js";
+import { exportPaperclip, type ExportOptions } from "./export-paperclip.js";
 
 const program = new Command();
 
 program
   .name("clawstrap")
   .description("Scaffold a production-ready AI agent workspace")
-  .version("1.1.0");
+  .version("1.2.0");
 
 program
   .command("init")
@@ -54,6 +55,25 @@ program
   .description("Show workspace status and configuration")
   .action(async () => {
     await showStatus();
+  });
+
+program
+  .command("export")
+  .description("Export workspace to another format")
+  .requiredOption("-f, --format <format>", "Export format (paperclip)")
+  .option("-o, --out <dir>", "Output directory")
+  .option("-n, --name <name>", "Company name")
+  .option("-m, --mission <mission>", "Company mission")
+  .option("-a, --adapter <type>", "Agent adapter type (default: claude_local)")
+  .option("--validate", "Validate export without writing")
+  .action(async (options: ExportOptions) => {
+    if (options.format !== "paperclip") {
+      console.error(
+        `\nUnknown format: ${options.format}. Supported: paperclip\n`
+      );
+      process.exit(1);
+    }
+    await exportPaperclip(options);
   });
 
 program.parse();
