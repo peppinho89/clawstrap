@@ -118,6 +118,176 @@ my-project/
 
 Solo single-agent workspaces get a leaner structure — no agent definitions, no quality-gates rule file, no memory directory. The workspace scales with your needs.
 
+## See the Difference
+
+### Session continuity
+
+**Without Clawstrap** — new day, new session, zero context:
+
+```
+You: Continue working on the API migration.
+Claude: I don't have context about an API migration. Could you explain
+        what you're working on, what's been done so far, and what the
+        next steps are?
+You: (spends 10 minutes re-explaining everything)
+```
+
+**With Clawstrap** — Claude reads `CLAUDE.md` and your progress automatically:
+
+```
+You: Continue working on the API migration.
+Claude: Reading progress tracker... Last session completed endpoints for
+        /users and /products. Next step from the plan: implement /orders
+        endpoint with pagination. The execution plan is in
+        tmp/api-migration/plan.md. Ready to proceed?
+```
+
+### Quality during batch work
+
+**Without Clawstrap** — process everything, discover problems at the end:
+
+```
+You: Extract data from these 50 supplier files.
+Claude: Done! Here are all 50 results.
+You: (reviews results, finds item #12 has wrong field mapping)
+You: The mapping was wrong. Redo all 50.
+```
+
+**With Clawstrap** — quality gates catch it early:
+
+```
+You: Extract data from these 50 supplier files.
+Claude: Processing batch. QC checkpoint at item #5 — reviewing most
+        complex item... Item #3 looks correct. Continuing.
+        QC checkpoint at item #10 — reviewing item #8...
+        ⚠ Item #12: field mapping mismatch. Confidence below threshold.
+        Stopping to fix before continuing. Only 7 items to redo.
+```
+
+### Subagent context control
+
+**Without Clawstrap** — subagent dumps everything into the conversation:
+
+```
+You: Research the top 20 competitors and their pricing.
+Claude: (spawns subagent, which returns 200 lines of raw data)
+        Here's everything I found: [wall of text fills context window]
+You: Now use that to write the report.
+Claude: I'm having trouble — my context is very long. Could you
+        remind me what the report should cover?
+```
+
+**With Clawstrap** — subagents write to files, return receipts:
+
+```
+You: Research the top 20 competitors and their pricing.
+Claude: Launching research subagent...
+        Subagent: "Done. 20 items. File: tmp/research/competitors.json.
+        Summary: 20 competitors with pricing tiers, 3 flagged as
+        low-confidence."
+Claude: Research complete. Reading the 3 low-confidence entries for
+        review before proceeding to the report.
+```
+
+## Working with Your Workspace
+
+### Starting a session
+
+Open Claude Code inside your Clawstrap workspace. That's it.
+
+```bash
+cd my-project
+claude
+```
+
+Claude automatically reads `CLAUDE.md` and every file in `.claude/rules/`. The governance is active from the first message. You don't configure anything, install plugins, or write system prompts.
+
+### Giving a task
+
+Just describe what you want. The governance changes how Claude responds — it plans first, then asks for approval before executing.
+
+```
+You: Build a REST API for user authentication with JWT tokens.
+
+Claude: Here's my plan:
+
+        1. Create auth module with login/register endpoints
+        2. JWT token generation and validation middleware
+        3. Password hashing with bcrypt
+        4. Protected route middleware
+        5. Unit tests for all auth flows
+
+        Shall I proceed with this plan?
+
+You: Yes, go ahead.
+
+Claude: Starting implementation...
+```
+
+Without Clawstrap, Claude would start writing code immediately. With it, the approval-first rule fires — you always see the plan before anything happens.
+
+### Ending and resuming sessions
+
+When you're done for the day, tell Claude to wrap up. The session handoff checklist runs automatically:
+
+```
+You: Let's wrap up for today.
+
+Claude: Running session handoff checklist:
+        ✓ Saved all work to SSOT files
+        ✓ Updated README.md status: "Last done: auth endpoints, Next: add rate limiting"
+        ✓ Wrote next-session plan to tmp/auth/plan.md
+        ✓ QC check: all endpoints return correct status codes
+
+        Next session: start with rate limiting middleware.
+        Plan file: tmp/auth/plan.md
+```
+
+Tomorrow, open Claude Code in the same directory. It reads `CLAUDE.md`, sees the plan file, and picks up:
+
+```
+You: Let's continue.
+
+Claude: Reading session plan from tmp/auth/plan.md...
+        Last session completed: login, register, JWT middleware.
+        Next: rate limiting middleware. Starting there.
+```
+
+### Delegating to subagents
+
+When a task needs parallel work, tell Claude to delegate. The governance rules ensure subagents stay disciplined:
+
+```
+You: I need to analyze 3 competitor APIs. Delegate this to a subagent.
+
+Claude: Launching research subagent with governance rules:
+        - Output goes to tmp/competitor-analysis/results.json
+        - One-line receipt on completion
+        - No raw data returned to this conversation
+
+        Subagent: "Done. 3 items. File: tmp/competitor-analysis/results.json.
+        Summary: 3 APIs analyzed, 2 use REST + JWT, 1 uses GraphQL."
+
+        Results written to file. Want me to read the findings and
+        summarize, or proceed to the comparison report?
+```
+
+The main session never holds the raw subagent output. Context stays clean.
+
+### When Claude makes a mistake
+
+Tell Claude to correct course. The correction gets persisted before being applied — so the learning survives even if the session ends:
+
+```
+You: Don't use var for variable declarations. Always use const or let.
+
+Claude: Writing correction to .claude/rules/context-discipline.md...
+        ✓ Rule added: "Use const/let, never var"
+        Now applying to current code...
+```
+
+The correction is saved to a durable rule file first, then applied. Next session, Claude follows the same rule without you repeating it.
+
 ## The Five Principles
 
 ### 1. File-First Persistence
