@@ -6,7 +6,7 @@ export default defineConfig({
   outExtension: () => ({ js: ".cjs" }),
   target: "node18",
   clean: true,
-  sourcemap: true,
+  sourcemap: false,
   banner: { js: "#!/usr/bin/env node" },
   loader: { ".tmpl": "text" },
 });

@@ -25,12 +25,24 @@
   ],
   "author": "Giuseppe Pace",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/peppinho89/clawstrap.git"
+  },
+  "homepage": "https://github.com/peppinho89/clawstrap#readme",
+  "bugs": {
+    "url": "https://github.com/peppinho89/clawstrap/issues"
+  },
   "engines": {
     "node": ">=18.0.0"
   },
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
     "commander": "^13.0.0",
