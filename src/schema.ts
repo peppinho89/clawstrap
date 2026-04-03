@@ -29,6 +29,19 @@ export const ClawstrapConfigSchema = z.object({
   qualityLevel: z.enum(QUALITY_LEVELS),
   sessionHandoff: z.boolean(),
   sdd: z.boolean().default(false),
+  watch: z.object({
+    adapter: z.enum(["claude-local", "claude-api", "ollama", "codex-local"])
+      .default("claude-local"),
+    scan: z.object({
+      intervalDays: z.number().default(7),
+    }).default({}),
+    silent: z.boolean().default(false),
+  }).optional(),
+  watchState: z.object({
+    lastGitCommit: z.string().optional(),
+    lastScanAt: z.string().optional(),
+    lastTranscriptAt: z.string().optional(),
+  }).optional(),
   lastExport: LastExportSchema,
 });
 
