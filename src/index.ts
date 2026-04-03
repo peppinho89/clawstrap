@@ -5,13 +5,14 @@ import { addSkill } from "./add-skill.js";
 import { addProject } from "./add-project.js";
 import { showStatus } from "./status.js";
 import { exportPaperclip, type ExportOptions } from "./export-paperclip.js";
+import { startDashboard, type DashboardOptions } from "./dashboard.js";
 
 const program = new Command();
 
 program
   .name("clawstrap")
   .description("Scaffold a production-ready AI agent workspace")
-  .version("1.2.0");
+  .version("2.0.0");
 
 program
   .command("init")
@@ -36,10 +37,20 @@ add
 
 add
   .command("skill")
-  .description("Add a new skill")
-  .argument("<name>", "Skill name")
-  .action(async (name: string) => {
-    await addSkill(name);
+  .description("Add a new skill (local or from URL)")
+  .argument("[name]", "Skill name (required for local, auto-detected for import)")
+  .option(
+    "--from <url>",
+    "Import from skills.sh, GitHub, or shorthand (org/repo/skill)"
+  )
+  .action(async (name: string | undefined, options: { from?: string }) => {
+    if (!name && !options.from) {
+      console.error(
+        "\nError: provide a skill name or use --from <url> to import.\n"
+      );
+      process.exit(1);
+    }
+    await addSkill(name ?? "imported", options);
   });
 
 add
@@ -74,6 +85,14 @@ program
       process.exit(1);
     }
     await exportPaperclip(options);
+  });
+
+program
+  .command("dashboard")
+  .description("Open the workspace dashboard in your browser")
+  .option("-p, --port <port>", "Server port", "4200")
+  .action(async (options: DashboardOptions) => {
+    await startDashboard(options);
   });
 
 program.parse();

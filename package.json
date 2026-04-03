@@ -1,6 +1,6 @@
 {
   "name": "clawstrap",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Scaffold a production-ready AI agent workspace in under 2 minutes",
   "type": "module",
   "bin": {

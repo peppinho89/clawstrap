@@ -9,4 +9,5 @@ export default defineConfig({
   sourcemap: false,
   banner: { js: "#!/usr/bin/env node" },
   loader: { ".tmpl": "text" },
+  external: ["../dashboard/api/index.js"],
 });
