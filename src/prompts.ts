@@ -8,6 +8,7 @@ export interface PromptAnswers {
   parallelAgents: ParallelAgents;
   qualityLevel: QualityLevel;
   sessionHandoff: boolean;
+  sdd: boolean;
 }
 
 export async function runPrompts(): Promise<PromptAnswers> {
@@ -84,12 +85,19 @@ export async function runPrompts(): Promise<PromptAnswers> {
     default: true,
   });
 
+  const sdd = await confirm({
+    message:
+      "Enable Spec-Driven Development? (write specs before implementing)",
+    default: false,
+  });
+
   return {
     workspaceName,
     workloadType,
     parallelAgents,
     qualityLevel,
     sessionHandoff,
+    sdd,
   };
 }
 
@@ -104,5 +112,6 @@ export function getDefaults(targetDir?: string): PromptAnswers {
     parallelAgents: "single",
     qualityLevel: "solo",
     sessionHandoff: true,
+    sdd: false,
   };
 }

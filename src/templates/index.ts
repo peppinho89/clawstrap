@@ -37,6 +37,12 @@ import newSkill from "./skills/new-skill.md.tmpl";
 import addProjectReadme from "./projects/add-project-readme.md.tmpl";
 // @ts-expect-error .tmpl files imported as text via tsup loader
 import addProjectProcess from "./projects/add-project-process.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import sddRule from "./rules/sdd.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import sddSpecTemplate from "./sdd-spec-template.md.tmpl";
+// @ts-expect-error .tmpl files imported as text via tsup loader
+import sddSpecCommand from "./commands/spec.md.tmpl";
 
 export const templates: Record<string, string> = {
   governanceFile,
@@ -58,4 +64,7 @@ export const templates: Record<string, string> = {
   newSkill,
   addProjectReadme,
   addProjectProcess,
+  sddRule,
+  sddSpecTemplate,
+  sddSpecCommand,
 };

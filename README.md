@@ -49,12 +49,15 @@ Scaffold a production-ready AI agent workspace.
 
 ? Enable session handoff checklists? (for multi-session work) Yes
 
+? Enable Spec-Driven Development? (write specs before implementing) Yes
+
 Configuration:
   Workspace:       my-project
   Workload:        Research & Analysis
   Parallel agents: single
   Quality level:   team
   Session handoff: yes
+  Spec-driven dev: yes
 
 Generating your workspace...
 
@@ -103,6 +106,8 @@ my-project/
 │   │   └── SKILL_REGISTRY.md        # Skill index
 │   ├── memory/
 │   │   └── MEMORY.md                # Cross-session memory (session handoff only)
+│   ├── commands/
+│   │   └── spec.md                  # /spec slash command (SDD only)
 │   ├── subagent-bootstrap.md        # Lightweight ad-hoc governance (multi-agent only)
 │   ├── gotcha-log.md                # Incident tracking — why rules exist
 │   └── future-considerations.md     # Deferred ideas parking lot
@@ -110,6 +115,8 @@ my-project/
 │   └── _template/
 │       ├── README.md                # Project metadata template
 │       └── process.md               # Workflow and session checklist template
+├── specs/
+│   └── _template.md                 # Spec template (SDD only)
 ├── tmp/                             # Gitignored session workspace
 ├── research/                        # Reference material
 ├── context/                         # Session checkpoints
@@ -321,6 +328,7 @@ Every rule in a Clawstrap workspace exists because something went wrong without 
 ```
 clawstrap init [directory]                    Scaffold a new workspace (interactive)
 clawstrap init [directory] --yes              Use defaults, skip prompts
+clawstrap init [directory] --sdd              Enable Spec-Driven Development mode
 clawstrap add agent <name>                    Add a new agent definition
 clawstrap add skill <name>                    Add a new skill with SKILL.md
 clawstrap add project <name>                  Add a new project with README + process.md
@@ -346,11 +354,60 @@ Generates a directory with `paperclip.manifest.json`, agent definitions with fro
 | `--mission`, `-m` | Company mission statement |
 | `--adapter`, `-a` | Agent adapter type (default: `claude_local`) |
 
+## Spec-Driven Development
+
+Enable SDD mode to enforce a spec-first workflow. Before Claude implements anything, it writes a structured spec, saves it to `specs/{name}.md`, and gets your explicit approval.
+
+```bash
+npx clawstrap init --sdd
+```
+
+What you get:
+
+- **`specs/_template.md`** — reusable spec format with problem statement, acceptance criteria, technical constraints, out-of-scope, and implementation notes
+- **`.claude/rules/sdd.md`** — governance rule Claude loads every session: "Never implement from a vague prompt"
+- **`.claude/commands/spec.md`** — `/spec` slash command that walks Claude through writing, saving, and presenting a spec for approval
+
+In practice:
+
+```
+You: Build a CSV export for the orders table.
+
+Claude: Writing spec to specs/csv-export-orders.md...
+
+        # Spec: CSV Export — Orders Table
+        Status: draft | Created: 2026-04-04
+
+        ## Problem Statement
+        Users need to export order data for reporting in external tools.
+
+        ## Acceptance Criteria
+        - [ ] Export all orders or filter by date range
+        - [ ] CSV includes: order_id, customer, total, status, created_at
+        - [ ] Empty state handled gracefully
+        - [ ] File named orders-export-{date}.csv
+
+        ## Technical Constraints
+        - Must use existing DB connection pool
+        - Must stream for large datasets (>10k rows)
+
+        ## Out of Scope
+        - PDF export
+        - Scheduled exports
+
+        Does this spec look right? Any changes before I start?
+
+You: Looks good, go ahead.
+
+Claude: Implementing from spec...
+```
+
 ## Flags
 
 | Flag | Description |
 |------|-------------|
 | `--yes`, `-y` | Skip prompts, use sensible defaults (init only) |
+| `--sdd` | Enable Spec-Driven Development mode (init only) |
 | `--version` | Show version |
 | `--help` | Show help |
 
@@ -360,7 +417,8 @@ Generates a directory with `paperclip.manifest.json`, agent definitions with fro
 |---------|--------|------|
 | **v1.0** | Done | `init` command, 4 workspace profiles, full governance templates, `--yes` mode |
 | **v1.1** | Done | `add agent`, `add skill`, `add project`, `status` commands |
-| **v1.2** | **Now** | `export --format paperclip` — Paperclip company template export |
+| **v1.2** | Done | `export --format paperclip` — Paperclip company template export |
+| **v1.3** | **Now** | `--sdd` flag — Spec-Driven Development mode with `/spec` slash command |
 | **v2.0** | Planned | Multi-model support, `upgrade` command, ClipMart publishing |
 
 ## Contributing

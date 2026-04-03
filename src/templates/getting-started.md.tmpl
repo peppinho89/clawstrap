@@ -42,7 +42,9 @@ tmp/                             ← Temporary files (gitignored)
 research/                        ← Reference material
 context/                         ← Session checkpoints
 artifacts/                       ← Durable output
-```
+{%#if sddEnabled%}specs/
+  _template.md                   ← Spec template (copy for each feature)
+{%/if%}```
 
 ---
 
@@ -128,6 +130,26 @@ This ensures no context is lost between sessions.
 - Validate schema on every write
 - Checkpoint every 5 batch items
 - Log all transformations for auditability
+{%/if%}
+
+---
+
+{%#if sddEnabled%}
+
+---
+
+## Spec-Driven Development
+
+This workspace enforces a spec-first workflow. Before any implementation:
+
+1. **Type `/spec`** to start a new spec interactively — Claude will guide you
+2. Or copy `specs/_template.md` manually, fill it in, and get approval
+3. Only implement after the spec is approved
+
+Your specs live in `specs/`. Each approved spec is the contract between you and
+Claude — implementation follows the spec, not the conversation.
+
+See `{%systemDir%}/rules/sdd.md` for the full rules and exemptions.
 {%/if%}
 
 ---

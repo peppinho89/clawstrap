@@ -162,4 +162,155 @@ describe("writer", () => {
     expect(gitignore).toContain("*");
     expect(gitignore).toContain("!.gitignore");
   });
+
+  // --- SDD (Spec-Driven Development) tests ---
+
+  describe("SDD feature", () => {
+    it("SDD files do NOT exist when sdd is off by default", () => {
+      const config = makeConfig();
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      expect(
+        fs.existsSync(path.join(tempDir, "specs/_template.md"))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(tempDir, ".claude/rules/sdd.md"))
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(tempDir, ".claude/commands/spec.md"))
+      ).toBe(false);
+    });
+
+    it("SDD on generates all 3 SDD files at correct paths", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      expect(
+        fs.existsSync(path.join(tempDir, "specs/_template.md"))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(tempDir, ".claude/rules/sdd.md"))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(tempDir, ".claude/commands/spec.md"))
+      ).toBe(true);
+    });
+
+    it("sdd.md contains expected rule content", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const sddRule = fs.readFileSync(
+        path.join(tempDir, ".claude/rules/sdd.md"),
+        "utf-8"
+      );
+      expect(sddRule).toContain("Never implement from a vague prompt");
+      expect(sddRule).toContain("specs/");
+      expect(sddRule).toContain("**not** required for");
+    });
+
+    it("spec template contains expected content with workspace name substituted", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const specTemplate = fs.readFileSync(
+        path.join(tempDir, "specs/_template.md"),
+        "utf-8"
+      );
+      expect(specTemplate).toContain("Problem Statement");
+      expect(specTemplate).toContain("Acceptance Criteria");
+      expect(specTemplate).toContain("Implementation Notes");
+      // Workspace name should be substituted — no literal template variable remaining
+      expect(specTemplate).not.toContain("{%workspaceName%}");
+      // The substituted workspace name should appear instead
+      expect(specTemplate).toContain("test-ws");
+    });
+
+    it("spec command contains expected content", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const specCommand = fs.readFileSync(
+        path.join(tempDir, ".claude/commands/spec.md"),
+        "utf-8"
+      );
+      expect(specCommand).toContain("specs/{name}.md");
+      expect(specCommand).toContain("approves");
+    });
+
+    it("no unresolved template variables in SDD files when sdd: true", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const sddFiles = [
+        path.join(tempDir, ".claude/rules/sdd.md"),
+        path.join(tempDir, "specs/_template.md"),
+        path.join(tempDir, ".claude/commands/spec.md"),
+      ];
+
+      for (const filePath of sddFiles) {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const unresolved = content.match(/\{%\w+%\}/g);
+        if (unresolved) {
+          throw new Error(
+            `Unresolved variables in ${filePath}: ${unresolved.join(", ")}`
+          );
+        }
+      }
+    });
+
+    it("CLAUDE.md contains SDD block when sdd: true", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const claudeMd = fs.readFileSync(
+        path.join(tempDir, "CLAUDE.md"),
+        "utf-8"
+      );
+      expect(claudeMd).toContain("Spec-Driven Development");
+    });
+
+    it("CLAUDE.md does NOT contain SDD block when sdd: false", () => {
+      const config = makeConfig({ sdd: false });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const claudeMd = fs.readFileSync(
+        path.join(tempDir, "CLAUDE.md"),
+        "utf-8"
+      );
+      expect(claudeMd).not.toContain("Spec-Driven Development");
+    });
+
+    it("GETTING_STARTED.md contains SDD block when sdd: true", () => {
+      const config = makeConfig({ sdd: true });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const gettingStarted = fs.readFileSync(
+        path.join(tempDir, "GETTING_STARTED.md"),
+        "utf-8"
+      );
+      expect(gettingStarted).toContain("Spec-Driven Development");
+    });
+
+    it("GETTING_STARTED.md does NOT contain SDD block when sdd: false", () => {
+      const config = makeConfig({ sdd: false });
+      const vars = deriveTemplateVars(config);
+      writeWorkspace(tempDir, vars, config);
+
+      const gettingStarted = fs.readFileSync(
+        path.join(tempDir, "GETTING_STARTED.md"),
+        "utf-8"
+      );
+      expect(gettingStarted).not.toContain("Spec-Driven Development");
+    });
+  });
 });

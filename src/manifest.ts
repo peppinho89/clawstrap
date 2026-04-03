@@ -73,6 +73,21 @@ export const OUTPUT_MANIFEST: ManifestEntry[] = [
     outputPath: "{%systemDir%}/memory/MEMORY.md",
     condition: "sessionHandoff",
   },
+  {
+    templateKey: "sddRule",
+    outputPath: "{%systemDir%}/rules/sdd.md",
+    condition: "sddEnabled",
+  },
+  {
+    templateKey: "sddSpecTemplate",
+    outputPath: "specs/_template.md",
+    condition: "sddEnabled",
+  },
+  {
+    templateKey: "sddSpecCommand",
+    outputPath: "{%systemDir%}/commands/spec.md",
+    condition: "sddEnabled",
+  },
 ];
 
 export const EMPTY_DIRS = ["tmp", "research", "context", "artifacts"];

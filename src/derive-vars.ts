@@ -56,5 +56,8 @@ export function deriveTemplateVars(config: ClawstrapConfig): TemplateVars {
 
     // Session handoff
     sessionHandoff: config.sessionHandoff,
+
+    // Spec-Driven Development
+    sddEnabled: config.sdd,
   };
 }

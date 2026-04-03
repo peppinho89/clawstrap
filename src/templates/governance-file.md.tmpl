@@ -112,3 +112,16 @@ Run this at every session end (mandatory, not optional):
 {%#if hasSubagents%}- Agents: `{%systemDir%}/agents/` — subagent definitions with governance baked in
 {%/if%}- Gotchas: `{%systemDir%}/gotcha-log.md` — incident log (why rules exist)
 - Future: `{%systemDir%}/future-considerations.md` — deferred ideas
+{%#if sddEnabled%}
+---
+
+## Spec-Driven Development
+
+This workspace uses SDD. Before implementing any feature:
+
+1. Write a spec → `specs/{name}.md` (use `/spec` or copy `specs/_template.md`)
+2. Get explicit user approval
+3. Implement from the approved spec — not from the conversation
+
+Rule details: `{%systemDir%}/rules/sdd.md`
+{%/if%}

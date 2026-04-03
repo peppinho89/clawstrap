@@ -35,6 +35,19 @@ describe("config schema", () => {
     expect(result.aiSystem).toBe("claude-code");
   });
 
+  it("sdd defaults to false when not provided", () => {
+    const minimal = {
+      createdAt: "2026-03-28T12:00:00.000Z",
+      workspaceName: "test",
+      workloadType: "custom",
+      parallelAgents: "single",
+      qualityLevel: "solo",
+      sessionHandoff: false,
+    };
+    const result = ClawstrapConfigSchema.parse(minimal);
+    expect(result.sdd).toBe(false);
+  });
+
   it("rejects empty workspace name", () => {
     expect(() =>
       ClawstrapConfigSchema.parse({ ...validConfig, workspaceName: "" })

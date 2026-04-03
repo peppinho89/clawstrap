@@ -15,7 +15,7 @@ const WORKLOAD_LABELS: Record<string, string> = {
 
 export async function init(
   directory: string,
-  options: { yes?: boolean }
+  options: { yes?: boolean; sdd?: boolean }
 ): Promise<void> {
   const targetDir = path.resolve(directory);
 
@@ -61,6 +61,7 @@ export async function init(
     parallelAgents: answers.parallelAgents,
     qualityLevel: answers.qualityLevel,
     sessionHandoff: answers.sessionHandoff,
+    sdd: options.sdd ?? answers.sdd,
   });
 
   // Print config summary (both interactive and --yes)
@@ -72,6 +73,7 @@ export async function init(
   console.log(
     `  Session handoff: ${config.sessionHandoff ? "yes" : "no"}`
   );
+  console.log(`  Spec-driven dev: ${config.sdd ? "yes" : "no"}`);
 
   // Derive template variables
   const vars = deriveTemplateVars(config);

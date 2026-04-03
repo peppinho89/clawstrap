@@ -28,6 +28,7 @@ export const ClawstrapConfigSchema = z.object({
   parallelAgents: z.enum(PARALLEL_AGENTS),
   qualityLevel: z.enum(QUALITY_LEVELS),
   sessionHandoff: z.boolean(),
+  sdd: z.boolean().default(false),
   lastExport: LastExportSchema,
 });
 

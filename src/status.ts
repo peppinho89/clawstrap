@@ -56,6 +56,7 @@ export async function showStatus(): Promise<void> {
   console.log(
     `  Session handoff: ${config.sessionHandoff ? "yes" : "no"}`
   );
+  console.log(`  Spec-driven dev: ${config.sdd ? "yes" : "no"}`);
 
   console.log(`\nStructure:`);
   console.log(`  Agents:   ${agentCount} (${systemDir}/agents/)`);

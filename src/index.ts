@@ -11,14 +11,15 @@ const program = new Command();
 program
   .name("clawstrap")
   .description("Scaffold a production-ready AI agent workspace")
-  .version("1.2.0");
+  .version("1.3.0");
 
 program
   .command("init")
   .description("Create a new AI workspace in the current directory")
   .argument("[directory]", "Target directory", ".")
   .option("-y, --yes", "Use defaults, skip prompts")
-  .action(async (directory: string, options: { yes?: boolean }) => {
+  .option("--sdd", "Enable Spec-Driven Development mode")
+  .action(async (directory: string, options: { yes?: boolean; sdd?: boolean }) => {
     await init(directory, options);
   });
 

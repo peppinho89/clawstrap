@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-04-04
+
+### Added
+
+- `--sdd` flag on `clawstrap init` to enable Spec-Driven Development mode
+- Interactive SDD prompt during setup (opt-in, default: no)
+- `specs/_template.md` — structured spec format scaffolded in every SDD workspace (problem statement, acceptance criteria, technical constraints, out-of-scope, open questions, implementation notes)
+- `.claude/rules/sdd.md` — auto-loaded governance rule enforcing spec-first workflow with explicit exemptions for small bug fixes and docs-only changes
+- `.claude/commands/spec.md` — `/spec` slash command that guides Claude through writing, saving, and getting approval on a spec before any implementation begins
+- SDD section in `CLAUDE.md` and `GETTING_STARTED.md` when mode is enabled
+- `status` command now shows `Spec-driven dev: yes/no`
+- 11 new tests covering SDD file generation, content correctness, conditional CLAUDE.md/GETTING_STARTED.md blocks, and schema default
+
+### Changed
+
+- Version bumped to 1.3.0
+
 ## [1.2.0] - 2026-03-31
 
 ### Added
