@@ -5,13 +5,15 @@ import { addSkill } from "./add-skill.js";
 import { addProject } from "./add-project.js";
 import { showStatus } from "./status.js";
 import { exportPaperclip, type ExportOptions } from "./export-paperclip.js";
+import { watch } from "./watch.js";
+import { analyze } from "./analyze.js";
 
 const program = new Command();
 
 program
   .name("clawstrap")
   .description("Scaffold a production-ready AI agent workspace")
-  .version("1.3.0");
+  .version("1.4.0");
 
 program
   .command("init")
@@ -75,6 +77,24 @@ program
       process.exit(1);
     }
     await exportPaperclip(options);
+  });
+
+program
+  .command("watch")
+  .description("Start adaptive memory daemon for this workspace")
+  .option("--stop", "Stop the running daemon")
+  .option("--silent", "Run without output")
+  .option("--once", "Run all observers once and exit (no persistent daemon)")
+  .option("--_daemon", undefined)
+  .action(async (options: { stop?: boolean; silent?: boolean; once?: boolean; _daemon?: boolean }) => {
+    await watch(options);
+  });
+
+program
+  .command("analyze")
+  .description("Run codebase convention scan immediately")
+  .action(async () => {
+    await analyze();
   });
 
 program.parse();

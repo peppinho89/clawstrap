@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadWorkspace } from "./load-workspace.js";
+import { isDaemonRunning } from "./watch/pid.js";
 
 const WORKLOAD_LABELS: Record<string, string> = {
   research: "Research & Analysis",
@@ -70,6 +71,24 @@ export async function showStatus(): Promise<void> {
     console.log(`  Format:    ${config.lastExport.format}`);
     console.log(`  Date:      ${exportDate}`);
     console.log(`  Output:    ${config.lastExport.outputDir}`);
+  }
+
+  // Watch status
+  const watchRunning = isDaemonRunning(rootDir);
+
+  console.log(`\nWatch:`);
+  console.log(`  Status:    ${watchRunning ? "running" : "stopped"}`);
+  if (config.watch) {
+    console.log(`  Adapter:   ${config.watch.adapter}`);
+  }
+  if (config.watchState?.lastGitCommit) {
+    console.log(`  Last git:  ${config.watchState.lastGitCommit.slice(0, 8)}`);
+  }
+  if (config.watchState?.lastScanAt) {
+    console.log(`  Last scan: ${config.watchState.lastScanAt.split("T")[0]}`);
+  }
+  if (config.watchState?.lastTranscriptAt) {
+    console.log(`  Last transcript: ${config.watchState.lastTranscriptAt.replace("T", " ").slice(0, 16)}`);
   }
 
   console.log();
