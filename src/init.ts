@@ -17,7 +17,15 @@ export async function init(
   directory: string,
   options: { yes?: boolean; sdd?: boolean }
 ): Promise<void> {
-  const targetDir = path.resolve(directory);
+  // Gather answers first (we need workspace name to determine target directory)
+  const answers = options.yes
+    ? getDefaults(directory)
+    : await runPrompts();
+
+  // When no explicit directory is given, use workspace name as the folder
+  const targetDir = directory === "."
+    ? path.resolve(answers.workspaceName)
+    : path.resolve(directory);
 
   // Safety check: overwrite protection
   if (fs.existsSync(targetDir)) {
@@ -45,14 +53,9 @@ export async function init(
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // Gather answers
-  const answers = options.yes
-    ? getDefaults(directory)
-    : await runPrompts();
-
   // Build config
   const config: ClawstrapConfig = ClawstrapConfigSchema.parse({
-    version: "1.0.0",
+    version: "1.4.1",
     createdAt: new Date().toISOString(),
     workspaceName: answers.workspaceName,
     targetDirectory: directory,
@@ -90,5 +93,10 @@ export async function init(
     console.log(`  \u2713 ${dir}/`);
   }
 
-  console.log(`\nDone. Open GETTING_STARTED.md to begin.\n`);
+  const folderName = path.basename(targetDir);
+  if (directory === ".") {
+    console.log(`\nDone. Run \`cd ${folderName}\` and open GETTING_STARTED.md to begin.\n`);
+  } else {
+    console.log(`\nDone. Open GETTING_STARTED.md to begin.\n`);
+  }
 }
