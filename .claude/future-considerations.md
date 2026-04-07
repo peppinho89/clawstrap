@@ -1,0 +1,16 @@
+# Future Considerations — clawstrap
+> Ideas and improvements deferred from current work. Not a backlog — a parking lot.
+
+## Format
+
+```
+### F001 — [Short title]
+**Added**: YYYY-MM-DD
+**Context**: [Why this came up]
+**Idea**: [What could be done]
+**Priority**: low | medium | high
+```
+
+## Entries
+
+*(None yet — add entries as ideas arise)*
