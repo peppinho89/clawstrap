@@ -1,0 +1,91 @@
+# CLAUDE.md — Master Governance Rules
+> **Workspace**: clawstrap | **Generated**: 2026-04-08 | **Status**: active
+> Loaded every session. Keep lean. Move details to skills or rules files.
+
+---
+
+## Workflow Rules
+
+**Approval-first, always.**
+Plan work and get explicit approval before executing. No speculative actions.
+If scope changes mid-task, pause and re-confirm.
+
+**If it's not on disk, it didn't happen.**
+Save findings immediately, not at session end. Flush every 5 operations.
+Write corrections to durable locations before applying them.
+
+**Quality > context cleanliness > speed > token cost.**
+Quality failures require full rework (100% waste). Never trade quality for tokens.
+
+---
+
+## Persistence Hierarchy
+
+From most ephemeral to most durable:
+
+| Layer | Location | Loaded When |
+|-------|----------|-------------|
+| Conversation | (in-context) | Always — volatile |
+| Temp files | `tmp/` | Per-task, gitignored |
+| Memory | `.claude/memory/` | On demand |
+| Skills | `.claude/skills/*/SKILL.md` | When triggered |
+| Rules | `.claude/rules/*.md` | Every session |
+| **CLAUDE.md** | `./CLAUDE.md` | **Every session** |
+
+---
+
+## Context Discipline
+
+- Flush working state to file every 5 operations
+- Before batch work: write execution plan to file (survives context loss)
+
+---
+
+## Session Handoff Checklist
+
+Run this at every session end (mandatory, not optional):
+
+1. Save all work to SSOT files
+2. Sync derived files (rebuild from SSOTs)
+3. SSOT integrity check (no duplicates, no stale data)
+4. Update progress tracker
+5. Write next-session plan (with pre-execution hooks listed)
+6. Launch QC on work done this session
+
+---
+
+## Security Rules
+
+- Never read `.env` files or echo credentials
+- Never install third-party MCP servers/plugins without explicit approval
+- Never write outside this workspace root — use project-local `tmp/`, not system `/tmp/`
+- Approved tools only — ask before using new tools/APIs
+
+---
+
+## Quality Rules
+
+- QC is a structural gate, not an optional post-step
+- Run QC checkpoints at regular intervals during batch work
+- All results must be reviewed before being marked complete
+
+---
+
+## Pointers to Other Layers
+
+- Rules: `.claude/rules/` — domain-specific rules loaded every session
+- Skills: `.claude/skills/SKILL_REGISTRY.md` — index of all skills
+- Gotchas: `.claude/gotcha-log.md` — incident log (why rules exist)
+- Future: `.claude/future-considerations.md` — deferred ideas
+
+---
+
+## Spec-Driven Development
+
+This workspace uses SDD. Before implementing any feature:
+
+1. Write a spec → `specs/{name}.md` (use `/spec` or copy `specs/_template.md`)
+2. Get explicit user approval
+3. Implement from the approved spec — not from the conversation
+
+Rule details: `.claude/rules/sdd.md`

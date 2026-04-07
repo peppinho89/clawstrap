@@ -1,0 +1,23 @@
+# Rule: Approval-First Workflow
+> **Scope**: All sessions | **Generated**: 2026-04-08
+
+## Core Principle
+
+Plan work and surface it before executing. Always.
+
+## Rules
+
+1. **Plan before executing** — present your approach and get explicit approval
+   before making changes. No speculative actions.
+
+2. **No shortcuts** — never skip a step because it seems tedious or obvious.
+   Every step exists for a reason.
+
+3. **Scope changes require re-approval** — if the task changes mid-execution,
+   pause and re-confirm the new scope before continuing.
+
+4. **State verification** — before modifying any file, read its current state.
+   Don't assume you know what's in a file from earlier in the conversation.
+
+5. **Destructive actions require explicit confirmation** — deleting files,
+   overwriting data, or resetting state always needs a direct "yes" from the user.
