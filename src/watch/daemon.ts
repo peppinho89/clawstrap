@@ -6,6 +6,7 @@ import { runScan } from "./scan.js";
 import { writeConventions } from "./writers.js";
 import { synthesizeMemory } from "./synthesize.js";
 import { inferArchitecturePatterns } from "./infer.js";
+import { checkAndPromoteCorrections } from "./promote.js";
 import { watchTranscriptDir, processTranscript } from "./transcripts.js";
 import { createAdapter } from "./adapters/index.js";
 import { clearPid } from "./pid.js";
@@ -65,7 +66,10 @@ export async function runDaemon(
       const { appendToMemory, appendToGotchaLog, appendToFutureConsiderations, appendToOpenThreads } = await import("./writers.js");
       let written = 0;
       if (result.decisions.length) written += appendToMemory(rootDir, result.decisions, "session");
-      if (result.corrections.length) appendToGotchaLog(rootDir, result.corrections);
+      if (result.corrections.length) {
+        appendToGotchaLog(rootDir, result.corrections);
+        await checkAndPromoteCorrections(rootDir, adapter, ui);
+      }
       if (result.deferredIdeas.length) appendToFutureConsiderations(rootDir, result.deferredIdeas);
       if (result.openThreads.length) appendToOpenThreads(rootDir, result.openThreads);
       entriesSinceLastSynthesis += written;

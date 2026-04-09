@@ -17,6 +17,7 @@ import { runGitObserver } from "../src/watch/git.js";
 import { runScan } from "../src/watch/scan.js";
 import { synthesizeMemory } from "../src/watch/synthesize.js";
 import { inferArchitecturePatterns } from "../src/watch/infer.js";
+import { checkAndPromoteCorrections, countPendingRules } from "../src/watch/promote.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1052,5 +1053,155 @@ describe("inferArchitecturePatterns", () => {
     const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
     expect(adapter.complete).toHaveBeenCalledOnce();
     expect(result).toContain("Always prefer composition.");
+  });
+});
+
+// ─── checkAndPromoteCorrections ───────────────────────────────────────────────
+
+describe("checkAndPromoteCorrections", () => {
+  let tempDir: string;
+
+  const validResponse =
+    "TITLE: Always validate inputs\nPRINCIPLE: All external inputs must be validated at the boundary.\nIMPERATIVES:\n- Validate at system boundaries\n- Never trust user input\n- Use schema validation";
+
+  const silentUI = {
+    daemonStarted: vi.fn(), gitStart: vi.fn(), gitDone: vi.fn(), gitPollDone: vi.fn(),
+    transcriptStart: vi.fn(), llmCallStart: vi.fn(), llmCallDone: vi.fn(), transcriptWriteDone: vi.fn(),
+    scanStart: vi.fn(), scanFilesStart: vi.fn(), scanFilesDone: vi.fn(), scanDone: vi.fn(),
+    synthStart: vi.fn(), synthDone: vi.fn(), inferStart: vi.fn(), inferDone: vi.fn(),
+    promoteStart: vi.fn(), promoteDone: vi.fn(), showIdle: vi.fn(), clear: vi.fn(),
+  };
+
+  function writeSimilarCorrections(dir: string, n: number): void {
+    const logPath = path.join(dir, ".claude", "gotcha-log.md");
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    let content = "# Gotcha Log\n\nIncident log.\n\n";
+    for (let i = 0; i < n; i++) {
+      content += `---\n[session] 2026-04-09T00:0${i}:00.000Z\nAlways validate user input before processing request data form\n`;
+    }
+    fs.writeFileSync(logPath, content, "utf-8");
+  }
+
+  beforeEach(() => { tempDir = makeTempDir(); });
+  afterEach(() => { fs.rmSync(tempDir, { recursive: true, force: true }); });
+
+  it("does nothing when gotcha-log does not exist", async () => {
+    const adapter = { complete: vi.fn() };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when fewer than 3 corrections exist", async () => {
+    writeSimilarCorrections(tempDir, 2);
+    const adapter = { complete: vi.fn() };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when corrections exist but no group reaches similarity threshold", async () => {
+    const logPath = path.join(tempDir, ".claude", "gotcha-log.md");
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    // Three completely different corrections — low Jaccard
+    const content =
+      "# Gotcha Log\n\n" +
+      "---\n[session] 2026-04-09T00:00:00Z\nAlways validate input forms\n" +
+      "---\n[session] 2026-04-09T00:01:00Z\nNever skip database migrations\n" +
+      "---\n[session] 2026-04-09T00:02:00Z\nUse async await pattern consistently\n";
+    fs.writeFileSync(logPath, content, "utf-8");
+    const adapter = { complete: vi.fn() };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("calls adapter and writes rule file when 3+ similar corrections found", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"));
+    expect(files).toHaveLength(1);
+  });
+
+  it("rule file contains pending-review frontmatter and imperatives", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const file = fs.readdirSync(rulesDir).find((f) => f.endsWith("-auto.md"))!;
+    const content = fs.readFileSync(path.join(rulesDir, file), "utf-8");
+    expect(content).toContain("status: pending-review");
+    expect(content).toContain("source: auto-promoted from gotcha-log");
+    expect(content).toContain("Always validate inputs");
+    expect(content).toContain("## Imperatives");
+    expect(content).toContain("- Validate at system boundaries");
+  });
+
+  it("skips promotion if rule file already exists (idempotent)", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    // First run — writes the file
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).toHaveBeenCalledTimes(1);
+    // Second run — file exists, should not call adapter again
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(adapter.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("appends a MEMORY.md entry after successful promotion", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const memoryPath = path.join(tempDir, ".claude", "memory", "MEMORY.md");
+    expect(fs.existsSync(memoryPath)).toBe(true);
+    const content = fs.readFileSync(memoryPath, "utf-8");
+    expect(content).toContain("Auto-promoted correction group to rule");
+  });
+
+  it("does not throw and calls promoteDone(0) when adapter throws", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockRejectedValue(new Error("adapter down")) };
+    await expect(checkAndPromoteCorrections(tempDir, adapter, silentUI)).resolves.toBeUndefined();
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(0);
+  });
+
+  it("does not write rule when adapter returns unparseable response", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue("Sorry, I cannot help with that.") };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.existsSync(rulesDir)
+      ? fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"))
+      : [];
+    expect(files).toHaveLength(0);
+  });
+});
+
+// ─── countPendingRules ────────────────────────────────────────────────────────
+
+describe("countPendingRules", () => {
+  let tempDir: string;
+
+  beforeEach(() => { tempDir = makeTempDir(); });
+  afterEach(() => { fs.rmSync(tempDir, { recursive: true, force: true }); });
+
+  it("returns 0 when rules dir does not exist", () => {
+    expect(countPendingRules(tempDir)).toBe(0);
+  });
+
+  it("returns 0 when no *-auto.md files exist", () => {
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.writeFileSync(path.join(rulesDir, "manual-rule.md"), "# Manual rule\n", "utf-8");
+    expect(countPendingRules(tempDir)).toBe(0);
+  });
+
+  it("counts only *-auto.md files with status: pending-review", () => {
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.writeFileSync(path.join(rulesDir, "foo-auto.md"), "---\nstatus: pending-review\n---\n# Foo\n", "utf-8");
+    fs.writeFileSync(path.join(rulesDir, "bar-auto.md"), "---\nstatus: active\n---\n# Bar\n", "utf-8");
+    fs.writeFileSync(path.join(rulesDir, "baz-auto.md"), "---\nstatus: pending-review\n---\n# Baz\n", "utf-8");
+    expect(countPendingRules(tempDir)).toBe(2);
   });
 });
