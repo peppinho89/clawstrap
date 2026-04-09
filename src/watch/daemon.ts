@@ -32,6 +32,7 @@ export async function runDaemon(
   ui.gitStart();
   const gitResult = await runGitObserver(rootDir, sinceCommit);
   ui.gitDone(gitResult ? { entriesWritten: gitResult.entriesWritten, lastCommit: gitResult.lastCommit } : null);
+  let lastGitCommit: string | null = gitResult?.lastCommit ?? sinceCommit;
   if (gitResult) {
     updateWatchState(rootDir, { lastGitCommit: gitResult.lastCommit });
   }
@@ -57,7 +58,29 @@ export async function runDaemon(
   });
   cleanup.push(stopTranscripts);
 
-  // 3. Periodic convention scan
+  // 3. Periodic git polling
+  let gitRunning = false;
+  const pollIntervalMinutes = config.watch?.git?.pollIntervalMinutes ?? 5;
+  const gitPollTimer = setInterval(async () => {
+    if (gitRunning) return;
+    gitRunning = true;
+    try {
+      const result = await runGitObserver(rootDir, lastGitCommit);
+      if (result && result.entriesWritten > 0) {
+        ui.gitStart();
+        ui.gitDone({ entriesWritten: result.entriesWritten, lastCommit: result.lastCommit });
+      }
+      if (result) {
+        lastGitCommit = result.lastCommit;
+        updateWatchState(rootDir, { lastGitCommit: result.lastCommit });
+      }
+    } finally {
+      gitRunning = false;
+    }
+  }, pollIntervalMinutes * 60 * 1000);
+  cleanup.push(() => clearInterval(gitPollTimer));
+
+  // 4. Periodic convention scan
   const intervalDays = config.watch?.scan?.intervalDays ?? 7;
   const lastScan = config.watchState?.lastScanAt ? new Date(config.watchState.lastScanAt) : null;
   const msSinceLastScan = lastScan ? Date.now() - lastScan.getTime() : Infinity;
