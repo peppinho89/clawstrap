@@ -101,6 +101,60 @@ describe("config schema", () => {
       expect(result.watch?.git?.pollIntervalMinutes).toBe(5);
     });
   });
+
+  describe("watch.synthesis config", () => {
+    it("defaults synthesis.enabled to false when watch.synthesis is omitted", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: { adapter: "claude-local" },
+      });
+      expect(result.watch?.synthesis?.enabled).toBe(false);
+    });
+
+    it("defaults synthesis.triggerEveryN to 10", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: { adapter: "claude-local" },
+      });
+      expect(result.watch?.synthesis?.triggerEveryN).toBe(10);
+    });
+
+    it("accepts custom synthesis config", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: {
+          adapter: "claude-local",
+          synthesis: { enabled: true, triggerEveryN: 5 },
+        },
+      });
+      expect(result.watch?.synthesis?.enabled).toBe(true);
+      expect(result.watch?.synthesis?.triggerEveryN).toBe(5);
+    });
+  });
+
+  describe("watchState.entriesSinceLastSynthesis", () => {
+    it("is optional and undefined when not provided", () => {
+      const result = ClawstrapConfigSchema.parse(validConfig);
+      expect(result.watchState).toBeUndefined();
+    });
+
+    it("parses entriesSinceLastSynthesis as a number", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watchState: { entriesSinceLastSynthesis: 7 },
+      });
+      expect(result.watchState?.entriesSinceLastSynthesis).toBe(7);
+    });
+
+    it("coerces entriesSinceLastSynthesis from string to number (written by updateWatchState)", () => {
+      // updateWatchState writes String(counter) into JSON; Zod must accept it on reload
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watchState: { entriesSinceLastSynthesis: "5" },
+      });
+      expect(result.watchState?.entriesSinceLastSynthesis).toBe(5);
+    });
+  });
 });
 
 describe("derive template vars", () => {

@@ -18,8 +18,9 @@ function formatEntry(source: string, text: string): string {
 /**
  * Append entries to MEMORY.md with source tag + timestamp.
  * Skips entries that are near-duplicates of existing content.
+ * Returns the number of entries actually written (after dedup filtering).
  */
-export function appendToMemory(rootDir: string, entries: string[], source: string): void {
+export function appendToMemory(rootDir: string, entries: string[], source: string): number {
   const memoryPath = path.join(rootDir, ".claude", "memory", "MEMORY.md");
   fs.mkdirSync(path.dirname(memoryPath), { recursive: true });
 
@@ -41,6 +42,8 @@ export function appendToMemory(rootDir: string, entries: string[], source: strin
     const appendText = "\n" + toAppend.join("\n") + "\n";
     fs.appendFileSync(memoryPath, appendText, "utf-8");
   }
+
+  return toAppend.length;
 }
 
 /**

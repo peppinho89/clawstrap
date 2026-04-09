@@ -4,6 +4,7 @@ import type { ClawstrapConfig } from "../schema.js";
 import { runGitObserver } from "./git.js";
 import { runScan } from "./scan.js";
 import { writeConventions } from "./writers.js";
+import { synthesizeMemory } from "./synthesize.js";
 import { watchTranscriptDir, processTranscript } from "./transcripts.js";
 import { createAdapter } from "./adapters/index.js";
 import { clearPid } from "./pid.js";
@@ -39,6 +40,19 @@ export async function runDaemon(
 
   // 2. Transcript watcher
   const adapter = createAdapter(config);
+  let entriesSinceLastSynthesis = config.watchState?.entriesSinceLastSynthesis ?? 0;
+  const synthEnabled = config.watch?.synthesis?.enabled ?? false;
+  const triggerEveryN = config.watch?.synthesis?.triggerEveryN ?? 10;
+
+  const maybeSynthesize = async () => {
+    if (!synthEnabled || entriesSinceLastSynthesis < triggerEveryN) return;
+    ui.synthStart();
+    const summary = await synthesizeMemory(rootDir, adapter);
+    ui.synthDone(summary);
+    entriesSinceLastSynthesis = 0;
+    updateWatchState(rootDir, { entriesSinceLastSynthesis: "0" });
+  };
+
   const stopTranscripts = watchTranscriptDir(rootDir, async (filePath) => {
     ui.transcriptStart(path.basename(filePath));
     ui.llmCallStart();
@@ -48,12 +62,18 @@ export async function runDaemon(
       : null);
     if (result) {
       const { appendToMemory, appendToGotchaLog, appendToFutureConsiderations, appendToOpenThreads } = await import("./writers.js");
-      if (result.decisions.length) appendToMemory(rootDir, result.decisions, "session");
+      let written = 0;
+      if (result.decisions.length) written += appendToMemory(rootDir, result.decisions, "session");
       if (result.corrections.length) appendToGotchaLog(rootDir, result.corrections);
       if (result.deferredIdeas.length) appendToFutureConsiderations(rootDir, result.deferredIdeas);
       if (result.openThreads.length) appendToOpenThreads(rootDir, result.openThreads);
-      updateWatchState(rootDir, { lastTranscriptAt: new Date().toISOString() });
+      entriesSinceLastSynthesis += written;
+      updateWatchState(rootDir, {
+        lastTranscriptAt: new Date().toISOString(),
+        entriesSinceLastSynthesis: String(entriesSinceLastSynthesis),
+      });
       ui.transcriptWriteDone();
+      await maybeSynthesize();
     }
   });
   cleanup.push(stopTranscripts);

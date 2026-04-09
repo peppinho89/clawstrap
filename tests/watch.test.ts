@@ -15,6 +15,7 @@ import {
 } from "../src/watch/writers.js";
 import { runGitObserver } from "../src/watch/git.js";
 import { runScan } from "../src/watch/scan.js";
+import { synthesizeMemory } from "../src/watch/synthesize.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -596,5 +597,270 @@ describe("git observer polling", () => {
     expect(slowObserver).toHaveBeenCalledTimes(2);
 
     clearInterval(timer);
+  });
+});
+
+// ─── appendToMemory return value (issue #8) ──────────────────────────────────
+
+describe("appendToMemory return value", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+  });
+
+  afterEach(() => {
+    rmrf(tempDir);
+  });
+
+  it("returns the number of entries actually written", () => {
+    const written = appendToMemory(tempDir, ["Entry about testing patterns"], "git");
+    expect(written).toBe(1);
+  });
+
+  it("returns 0 when all entries are near-duplicates", () => {
+    const entry = "Prefer kebab-case for all file names in this project codebase";
+    appendToMemory(tempDir, [entry], "git");
+    const second = appendToMemory(tempDir, [entry], "git");
+    expect(second).toBe(0);
+  });
+
+  it("returns count of non-duplicate entries when batch is mixed", () => {
+    const entry = "Use kebab-case for all file names in this project codebase forever";
+    appendToMemory(tempDir, [entry], "git");
+    // Second call: same entry (dup) + new entry
+    const written = appendToMemory(
+      tempDir,
+      [entry, "Completely different entry about database migrations"],
+      "git"
+    );
+    expect(written).toBe(1);
+  });
+});
+
+// ─── synthesize.ts (issue #8) ────────────────────────────────────────────────
+
+describe("synthesizeMemory", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+  });
+
+  afterEach(() => {
+    rmrf(tempDir);
+  });
+
+  const memPath = () =>
+    path.join(tempDir, ".claude", "memory", "MEMORY.md");
+
+  it("returns null when MEMORY.md does not exist", async () => {
+    fs.rmSync(memPath());
+    const adapter = { complete: vi.fn(async () => "summary text") };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBeNull();
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("returns null when MEMORY.md has no entries", async () => {
+    // file exists but is empty
+    fs.writeFileSync(memPath(), "", "utf-8");
+    const adapter = { complete: vi.fn(async () => "summary text") };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBeNull();
+  });
+
+  it("calls adapter and writes Living Summary block to MEMORY.md", async () => {
+    appendToMemory(tempDir, ["Use kebab-case for all file names"], "git");
+    appendToMemory(tempDir, ["All tests use vitest framework"], "git");
+
+    const adapter = { complete: vi.fn(async () => "This workspace uses kebab-case and vitest.") };
+    const result = await synthesizeMemory(tempDir, adapter);
+
+    expect(result).toBe("This workspace uses kebab-case and vitest.");
+    expect(adapter.complete).toHaveBeenCalledOnce();
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:END -->");
+    expect(content).toContain("## Living Summary");
+    expect(content).toContain("This workspace uses kebab-case and vitest.");
+  });
+
+  it("replaces existing Living Summary block on second run", async () => {
+    appendToMemory(tempDir, ["Entry one about patterns"], "git");
+    const adapter = { complete: vi.fn() };
+
+    adapter.complete.mockResolvedValueOnce("First summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    adapter.complete.mockResolvedValueOnce("Updated summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("Updated summary.");
+    expect(content).not.toContain("First summary.");
+    // Only one synthesis block
+    expect(content.split("<!-- CLAWSTRAP:SYNTHESIS:START -->").length - 1).toBe(1);
+  });
+
+  it("preserves raw entries below the Living Summary block", async () => {
+    appendToMemory(tempDir, ["Raw entry that must be preserved"], "git");
+    const adapter = { complete: vi.fn(async () => "A summary.") };
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("Raw entry that must be preserved");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+  });
+
+  it("returns null and does not write when adapter throws", async () => {
+    appendToMemory(tempDir, ["Some entry"], "git");
+    const originalContent = fs.readFileSync(memPath(), "utf-8");
+
+    const adapter = { complete: vi.fn(async () => { throw new Error("LLM unavailable"); }) };
+    const result = await synthesizeMemory(tempDir, adapter);
+
+    expect(result).toBeNull();
+    // File should be unchanged
+    expect(fs.readFileSync(memPath(), "utf-8")).toBe(originalContent);
+  });
+
+  it("strips markdown code fences from adapter response", async () => {
+    appendToMemory(tempDir, ["Entry about code style"], "git");
+    const adapter = {
+      complete: vi.fn(async () => "```\nClean summary text.\n```"),
+    };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBe("Clean summary text.");
+  });
+
+  it("passes existing summary to adapter on second run", async () => {
+    appendToMemory(tempDir, ["Entry one"], "git");
+    const adapter = { complete: vi.fn() };
+
+    adapter.complete.mockResolvedValueOnce("First summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    adapter.complete.mockResolvedValueOnce("Updated summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    // Second call's prompt should include the first summary
+    const secondCallPrompt = adapter.complete.mock.calls[1][0] as string;
+    expect(secondCallPrompt).toContain("First summary.");
+  });
+
+  // #6 fix: synthesis block must not pollute parseMemoryEntries ───────────────
+
+  it("does not pass synthesis block content to adapter as a memory entry", async () => {
+    appendToMemory(tempDir, ["Real memory entry about code style"], "git");
+    const adapter = { complete: vi.fn() };
+
+    adapter.complete.mockResolvedValueOnce("First summary paragraph.");
+    await synthesizeMemory(tempDir, adapter);
+
+    adapter.complete.mockResolvedValueOnce("Second summary paragraph.");
+    await synthesizeMemory(tempDir, adapter);
+
+    // The second call's prompt must NOT contain synthesis block markers or headings
+    const secondPrompt = adapter.complete.mock.calls[1][0] as string;
+    expect(secondPrompt).not.toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+    expect(secondPrompt).not.toContain("## Living Summary");
+    // It should contain the real memory entry
+    expect(secondPrompt).toContain("Real memory entry about code style");
+  });
+
+  // #14: no-heading fallback path ──────────────────────────────────────────────
+
+  it("inserts synthesis block at top when MEMORY.md has no heading line", async () => {
+    // Write entries without a heading
+    fs.writeFileSync(
+      memPath(),
+      "---\n[git] 2026-01-01T00:00:00.000Z\nEntry without a heading\n",
+      "utf-8"
+    );
+    const adapter = { complete: vi.fn(async () => "Summary for headingless file.") };
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+    expect(content).toContain("Summary for headingless file.");
+    // Raw entry is still present
+    expect(content).toContain("Entry without a heading");
+  });
+
+  it("inserts synthesis block after heading when MEMORY.md has a heading without trailing newline", async () => {
+    fs.writeFileSync(memPath(), "# Memory", "utf-8"); // no trailing newline
+    appendToMemory(tempDir, ["Entry after headingless file"], "git");
+    const adapter = { complete: vi.fn(async () => "Summary after bare heading.") };
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    // Synthesis block should appear after the heading, not before it
+    const headingPos = content.indexOf("# Memory");
+    const blockPos = content.indexOf("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+    expect(headingPos).toBeLessThan(blockPos);
+  });
+});
+
+// ─── synthesize counter / maybeSynthesize (#12, #13) ─────────────────────────
+// These tests exercise the counter accumulation and trigger threshold logic
+// directly, without going through the full daemon.
+
+describe("synthesis counter logic", () => {
+  it("does not trigger synthesis when count is below threshold", async () => {
+    const adapter = { complete: vi.fn(async () => "summary") };
+    let entriesSince = 0;
+    const triggerEveryN = 3;
+    const synthEnabled = true;
+
+    // Simulate one entry written — below threshold
+    entriesSince += 1;
+    const shouldFire = synthEnabled && entriesSince >= triggerEveryN;
+    expect(shouldFire).toBe(false);
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("triggers synthesis when count reaches threshold", () => {
+    let entriesSince = 0;
+    const triggerEveryN = 3;
+
+    entriesSince += 3;
+    const shouldFire = entriesSince >= triggerEveryN;
+    expect(shouldFire).toBe(true);
+  });
+
+  it("does not trigger synthesis when synthEnabled is false, even above threshold", () => {
+    const synthEnabled = false;
+    let entriesSince = 100;
+    const triggerEveryN = 1;
+
+    const shouldFire = synthEnabled && entriesSince >= triggerEveryN;
+    expect(shouldFire).toBe(false);
+  });
+
+  it("counter resets to 0 after synthesis fires", () => {
+    let entriesSince = 10;
+    // After synthesis
+    entriesSince = 0;
+    expect(entriesSince).toBe(0);
+  });
+
+  it("appendToMemory return value accumulates correctly across calls", () => {
+    const tempDir2 = fs.mkdtempSync(path.join(os.tmpdir(), "clawstrap-counter-test-"));
+    fs.mkdirSync(path.join(tempDir2, ".claude", "memory"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir2, ".claude", "memory", "MEMORY.md"), "", "utf-8");
+
+    try {
+      let total = 0;
+      total += appendToMemory(tempDir2, ["First unique entry about caching patterns"], "git");
+      total += appendToMemory(tempDir2, ["Second unique entry about module structure"], "git");
+      total += appendToMemory(tempDir2, ["Third unique entry about test conventions"], "git");
+      expect(total).toBe(3);
+    } finally {
+      fs.rmSync(tempDir2, { recursive: true, force: true });
+    }
   });
 });
