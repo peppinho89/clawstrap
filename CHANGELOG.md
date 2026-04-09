@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-04-10
+
+### Fixed
+
+- `clawstrap watch` ora spinner crash on startup — `TypeError: ora.default is not a function` caused by tsup's CJS bundle ESM interop; normalised at import time
+- Stopwords list was duplicated independently in `git.ts` and `promote.ts`; extracted to shared `src/watch/stopwords.ts` to prevent drift
+- Concurrent LLM adapter calls (transcript, synthesis, inference, promotion) now serialized via a promise-chain wrapper in the daemon — prevents unbounded concurrent API requests
+- `clawstrap status` now lists individual pending-review rule files with title previews (previously showed count only)
+
+### Changed
+
+- `clawstrap init` governance template now includes a **Directory Map** table mapping `artifacts/`, `context/`, `research/`, `tmp/`, and `.claude/memory/` to their purpose and when to write to them
+- `clawstrap init` context-discipline rule now routes execution plans to `context/plan-{date}-{task}.md` instead of `tmp/` (which is for subagent output only); adds explicit session handoff paths
+
 ## [1.5.0] - 2026-04-09
 
 ### Added
