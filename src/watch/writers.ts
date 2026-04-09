@@ -81,6 +81,25 @@ export function appendToFutureConsiderations(rootDir: string, entries: string[])
   fs.appendFileSync(fcPath, "\n" + toAppend + "\n", "utf-8");
 }
 
+/**
+ * Append open threads to .claude/memory/open-threads.md
+ */
+export function appendToOpenThreads(rootDir: string, entries: string[]): void {
+  const otPath = path.join(rootDir, ".claude", "memory", "open-threads.md");
+  fs.mkdirSync(path.dirname(otPath), { recursive: true });
+
+  if (!fs.existsSync(otPath)) {
+    fs.writeFileSync(
+      otPath,
+      "# Open Threads\n\nUnresolved questions and next steps.\n\n",
+      "utf-8"
+    );
+  }
+
+  const toAppend = entries.map((e) => formatEntry("session", e)).join("\n");
+  fs.appendFileSync(otPath, "\n" + toAppend + "\n", "utf-8");
+}
+
 const AUTO_START = "<!-- CLAWSTRAP:AUTO -->";
 const AUTO_END = "<!-- CLAWSTRAP:END -->";
 

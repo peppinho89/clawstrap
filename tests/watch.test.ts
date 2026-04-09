@@ -10,6 +10,7 @@ import {
   appendToMemory,
   appendToGotchaLog,
   appendToFutureConsiderations,
+  appendToOpenThreads,
   writeConventions,
 } from "../src/watch/writers.js";
 import { runGitObserver } from "../src/watch/git.js";
@@ -254,6 +255,27 @@ describe("writers", () => {
     const content = fs.readFileSync(fcPath, "utf-8");
     expect(content).toContain("# Future Considerations");
     expect(content).toContain("Test future idea");
+  });
+
+  // appendToOpenThreads ────────────────────────────────────────────────────
+
+  it("appendToOpenThreads appends entries with timestamp", () => {
+    const otPath = path.join(tempDir, ".claude", "memory", "open-threads.md");
+    appendToOpenThreads(tempDir, ["Revisit auth token expiry logic"]);
+    const content = fs.readFileSync(otPath, "utf-8");
+    expect(content).toContain("Revisit auth token expiry logic");
+    expect(content).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect(content).toContain("[session]");
+  });
+
+  it("appendToOpenThreads creates file with header when it doesn't exist", () => {
+    rmrf(tempDir);
+    tempDir = makeTempDir();
+    const otPath = path.join(tempDir, ".claude", "memory", "open-threads.md");
+    appendToOpenThreads(tempDir, ["Test open thread"]);
+    const content = fs.readFileSync(otPath, "utf-8");
+    expect(content).toContain("# Open Threads");
+    expect(content).toContain("Test open thread");
   });
 
   // writeConventions ───────────────────────────────────────────────────────

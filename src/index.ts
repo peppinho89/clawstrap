@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("clawstrap")
   .description("Scaffold a production-ready AI agent workspace")
-  .version("1.4.1");
+  .version("1.4.2");
 
 program
   .command("init")
