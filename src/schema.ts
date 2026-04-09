@@ -48,7 +48,7 @@ export const ClawstrapConfigSchema = z.object({
     lastGitCommit: z.string().optional(),
     lastScanAt: z.string().optional(),
     lastTranscriptAt: z.string().optional(),
-    entriesSinceLastSynthesis: z.number().optional(),
+    entriesSinceLastSynthesis: z.coerce.number().optional(),
   }).optional(),
   lastExport: LastExportSchema,
 });

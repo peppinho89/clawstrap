@@ -170,6 +170,7 @@ class RichUI implements WatchUI {
   // Memory synthesis ──────────────────────────────────────────────────────────
 
   synthStart(): void {
+    this.spinner?.stop();
     this.spinner = ora({
       text: `${T.branch} Synthesising memory...`,
       prefixText: "",

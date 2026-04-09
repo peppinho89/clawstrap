@@ -14,11 +14,14 @@ function extractExistingSummary(content: string): string | null {
   if (startIdx === -1 || endIdx === -1) return null;
 
   const block = content.slice(startIdx + SYNTH_START.length, endIdx).trim();
-  // Strip the "## Living Summary" heading and "> Updated: ..." line
-  return block
-    .replace(/^##\s+Living Summary\s*/m, "")
-    .replace(/^>\s+Updated:.*$/m, "")
-    .trim() || null;
+  // Strip only the known structural leading lines (heading + timestamp) by
+  // walking line-by-line from the top — avoids clobbering body content that
+  // happens to match the same patterns.
+  const lines = block.split("\n");
+  let start = 0;
+  if (/^##\s+Living Summary/.test(lines[start] ?? "")) start++;
+  if (/^>\s+Updated:/.test(lines[start] ?? "")) start++;
+  return lines.slice(start).join("\n").trim() || null;
 }
 
 function buildSynthBlock(summary: string): string {
@@ -51,8 +54,10 @@ function writeSynthBlock(memoryPath: string, summary: string): void {
     return;
   }
 
-  // Insert after first heading line (or at top if none)
-  const headingMatch = /^#[^\n]*\n/m.exec(content);
+  // Insert after first heading line (or at top if none).
+  // Match the heading with an optional trailing newline so a file whose last
+  // line is a bare `# Heading` (no newline) still inserts correctly.
+  const headingMatch = /^#[^\n]*\n?/m.exec(content);
   if (headingMatch) {
     const insertAt = headingMatch.index + headingMatch[0].length;
     const updated = content.slice(0, insertAt) + "\n" + block + "\n" + content.slice(insertAt);
@@ -76,7 +81,13 @@ export async function synthesizeMemory(
   if (!fs.existsSync(memoryPath)) return null;
 
   const content = fs.readFileSync(memoryPath, "utf-8");
-  const allEntries = parseMemoryEntries(content);
+  // Strip the synthesis block before parsing entries so it doesn't pollute
+  // the adapter prompt or the dedup comparison on subsequent runs.
+  const contentWithoutSynthBlock = content.replace(
+    /<!-- CLAWSTRAP:SYNTHESIS:START -->[\s\S]*?<!-- CLAWSTRAP:SYNTHESIS:END -->/,
+    ""
+  );
+  const allEntries = parseMemoryEntries(contentWithoutSynthBlock);
   if (allEntries.length === 0) return null;
 
   const recentEntries = allEntries.slice(-MAX_ENTRIES_TO_SEND);

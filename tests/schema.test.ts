@@ -145,6 +145,15 @@ describe("config schema", () => {
       });
       expect(result.watchState?.entriesSinceLastSynthesis).toBe(7);
     });
+
+    it("coerces entriesSinceLastSynthesis from string to number (written by updateWatchState)", () => {
+      // updateWatchState writes String(counter) into JSON; Zod must accept it on reload
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watchState: { entriesSinceLastSynthesis: "5" },
+      });
+      expect(result.watchState?.entriesSinceLastSynthesis).toBe(5);
+    });
   });
 });
 
