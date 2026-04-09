@@ -11,6 +11,22 @@ import { watchTranscriptDir, processTranscript } from "./transcripts.js";
 import { createAdapter } from "./adapters/index.js";
 import { clearPid } from "./pid.js";
 import type { WatchUI } from "./ui.js";
+import type { Adapter } from "./adapters/index.js";
+
+/**
+ * Wraps an adapter so that at most one `complete()` call runs at a time.
+ * Concurrent calls are chained — each waits for the previous to settle.
+ */
+function serializedAdapter(adapter: Adapter): Adapter {
+  let chain = Promise.resolve();
+  return {
+    complete(prompt: string) {
+      const result = chain.then(() => adapter.complete(prompt));
+      chain = result.then(() => {}, () => {});
+      return result;
+    },
+  };
+}
 
 export async function runDaemon(
   rootDir: string,
@@ -41,7 +57,7 @@ export async function runDaemon(
   }
 
   // 2. Transcript watcher
-  const adapter = createAdapter(config);
+  const adapter = serializedAdapter(createAdapter(config));
   let entriesSinceLastSynthesis = config.watchState?.entriesSinceLastSynthesis ?? 0;
   const synthEnabled = config.watch?.synthesis?.enabled ?? false;
   const triggerEveryN = config.watch?.synthesis?.triggerEveryN ?? 10;

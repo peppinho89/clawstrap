@@ -4,14 +4,10 @@ import { parseMemoryEntries } from "./dedup.js";
 import { appendToMemory } from "./writers.js";
 import type { Adapter } from "./adapters/index.js";
 import type { WatchUI } from "./ui.js";
+import { STOPWORDS } from "./stopwords.js";
 
 const SIMILARITY_THRESHOLD = 0.65;
 const MIN_GROUP_SIZE = 3;
-
-const STOPWORDS = new Set(
-  "a an the is are was were be been being have has had do does did will would could should may might must can this that these those i we you he she it they of in on at to for with from by about"
-    .split(" ")
-);
 
 // ─── similarity helpers ───────────────────────────────────────────────────────
 
@@ -190,19 +186,35 @@ export async function checkAndPromoteCorrections(
 
 // ─── status helper ────────────────────────────────────────────────────────────
 
-/** Count .claude/rules/*-auto.md files with status: pending-review */
-export function countPendingRules(rootDir: string): number {
+export interface PendingRule {
+  file: string;
+  title: string;
+}
+
+/**
+ * Return all .claude/rules/*-auto.md files with status: pending-review,
+ * each with its filename and the first `# Heading` found in the file.
+ */
+export function listPendingRules(rootDir: string): PendingRule[] {
   const rulesDir = path.join(rootDir, ".claude", "rules");
-  if (!fs.existsSync(rulesDir)) return 0;
-  let count = 0;
+  if (!fs.existsSync(rulesDir)) return [];
+  const results: PendingRule[] = [];
   for (const entry of fs.readdirSync(rulesDir)) {
     if (!entry.endsWith("-auto.md")) continue;
     try {
       const content = fs.readFileSync(path.join(rulesDir, entry), "utf-8");
-      if (content.includes("status: pending-review")) count++;
+      if (!content.includes("status: pending-review")) continue;
+      const headingMatch = content.match(/^#\s+(.+)$/m);
+      const title = headingMatch ? headingMatch[1].trim() : "(no title)";
+      results.push({ file: entry, title });
     } catch {
       // skip unreadable files
     }
   }
-  return count;
+  return results;
+}
+
+/** Count .claude/rules/*-auto.md files with status: pending-review */
+export function countPendingRules(rootDir: string): number {
+  return listPendingRules(rootDir).length;
 }

@@ -2,17 +2,12 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { appendToMemory } from "./writers.js";
+import { STOPWORDS } from "./stopwords.js";
 
 export interface GitObserverResult {
   lastCommit: string;  // SHA of the most recent commit processed
   entriesWritten: number;
 }
-
-const STOPWORDS = new Set([
-  "fix", "add", "update", "remove", "feat", "chore",
-  "the", "a", "an", "and", "or", "in", "on", "at", "to", "for",
-  "of", "is", "was", "be", "it", "as", "with", "by", "this", "that",
-]);
 
 interface CommitEntry {
   sha: string;

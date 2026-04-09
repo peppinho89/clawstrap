@@ -17,7 +17,8 @@ import { runGitObserver } from "../src/watch/git.js";
 import { runScan } from "../src/watch/scan.js";
 import { synthesizeMemory } from "../src/watch/synthesize.js";
 import { inferArchitecturePatterns } from "../src/watch/infer.js";
-import { checkAndPromoteCorrections, countPendingRules } from "../src/watch/promote.js";
+import { checkAndPromoteCorrections, countPendingRules, listPendingRules } from "../src/watch/promote.js";
+import { STOPWORDS } from "../src/watch/stopwords.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1293,5 +1294,133 @@ describe("countPendingRules", () => {
     fs.writeFileSync(path.join(rulesDir, "bar-auto.md"), "---\nstatus: active\n---\n# Bar\n", "utf-8");
     fs.writeFileSync(path.join(rulesDir, "baz-auto.md"), "---\nstatus: pending-review\n---\n# Baz\n", "utf-8");
     expect(countPendingRules(tempDir)).toBe(2);
+  });
+});
+
+// ─── STOPWORDS (Fix 1) ───────────────────────────────────────────────────────
+
+describe("STOPWORDS", () => {
+  it("is a Set", () => {
+    expect(STOPWORDS).toBeInstanceOf(Set);
+  });
+
+  it("contains common stop words", () => {
+    for (const word of ["a", "an", "the", "is", "are", "was", "were", "be", "of", "in", "on", "at", "to", "for", "with", "by", "about"]) {
+      expect(STOPWORDS.has(word)).toBe(true);
+    }
+  });
+
+  it("does not contain typical content words", () => {
+    for (const word of ["function", "async", "typescript", "module", "refactor"]) {
+      expect(STOPWORDS.has(word)).toBe(false);
+    }
+  });
+});
+
+// ─── serializedAdapter (Fix 3) ───────────────────────────────────────────────
+
+describe("serializedAdapter ordering", () => {
+  it("ensures concurrent calls are serialized — second starts only after first resolves", async () => {
+    const order: string[] = [];
+
+    // A slow adapter that records when each call starts and ends
+    const rawAdapter = {
+      complete: async (prompt: string): Promise<string> => {
+        order.push(`start:${prompt}`);
+        await new Promise<void>((res) => setTimeout(res, 10));
+        order.push(`end:${prompt}`);
+        return `done:${prompt}`;
+      },
+    };
+
+    // Inline the same serialization logic from daemon.ts so the test is
+    // self-contained and doesn't depend on an exported internal helper.
+    function makeSerializedAdapter(adapter: typeof rawAdapter) {
+      let chain = Promise.resolve();
+      return {
+        complete(prompt: string) {
+          const result = chain.then(() => adapter.complete(prompt));
+          chain = result.then(() => {}, () => {});
+          return result;
+        },
+      };
+    }
+
+    const serialized = makeSerializedAdapter(rawAdapter);
+
+    // Fire both calls simultaneously
+    const [r1, r2] = await Promise.all([
+      serialized.complete("A"),
+      serialized.complete("B"),
+    ]);
+
+    expect(r1).toBe("done:A");
+    expect(r2).toBe("done:B");
+
+    // Serialized: A must fully complete before B starts
+    expect(order).toEqual(["start:A", "end:A", "start:B", "end:B"]);
+  });
+});
+
+// ─── listPendingRules (Fix 4) ────────────────────────────────────────────────
+
+describe("listPendingRules", () => {
+  let tempDir: string;
+
+  beforeEach(() => { tempDir = makeTempDir(); });
+  afterEach(() => { fs.rmSync(tempDir, { recursive: true, force: true }); });
+
+  it("returns empty array when rules dir does not exist", () => {
+    expect(listPendingRules(tempDir)).toEqual([]);
+  });
+
+  it("returns correct file and title for pending-review files", () => {
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(rulesDir, "validate-input-auto.md"),
+      "---\nstatus: pending-review\n---\n\n# Always validate inputs\n\nSome text.\n",
+      "utf-8"
+    );
+    fs.writeFileSync(
+      path.join(rulesDir, "async-await-auto.md"),
+      "---\nstatus: pending-review\n---\n\n# Never mix callbacks and promises\n\nSome text.\n",
+      "utf-8"
+    );
+
+    const result = listPendingRules(tempDir);
+    expect(result).toHaveLength(2);
+
+    const files = result.map((r) => r.file).sort();
+    expect(files).toEqual(["async-await-auto.md", "validate-input-auto.md"]);
+
+    const byFile = Object.fromEntries(result.map((r) => [r.file, r.title]));
+    expect(byFile["validate-input-auto.md"]).toBe("Always validate inputs");
+    expect(byFile["async-await-auto.md"]).toBe("Never mix callbacks and promises");
+  });
+
+  it("excludes files without status: pending-review", () => {
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(rulesDir, "active-auto.md"),
+      "---\nstatus: active\n---\n\n# Active rule\n",
+      "utf-8"
+    );
+    expect(listPendingRules(tempDir)).toHaveLength(0);
+  });
+
+  it("uses fallback title when no # heading is present", () => {
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(rulesDir, "no-title-auto.md"),
+      "---\nstatus: pending-review\n---\n\nNo heading here.\n",
+      "utf-8"
+    );
+    const result = listPendingRules(tempDir);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.title).toBe("(no title)");
+    expect(result[0]?.file).toBe("no-title-auto.md");
   });
 });
