@@ -1,5 +1,9 @@
 import pc from "picocolors";
-import ora, { type Ora } from "ora";
+import _oraImport, { type Ora } from "ora";
+// tsup's __toESM with isNodeMode=1 sets default=module (not the constructor) when __esModule
+// is present. Normalise to the actual function in both ESM and bundled-CJS contexts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ora = (typeof _oraImport === "function" ? _oraImport : (_oraImport as any).default) as typeof _oraImport;
 
 export interface WatchUI {
   daemonStarted(): void;
