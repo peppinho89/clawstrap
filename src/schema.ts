@@ -38,12 +38,17 @@ export const ClawstrapConfigSchema = z.object({
     git: z.object({
       pollIntervalMinutes: z.number().default(5),
     }).default({}),
+    synthesis: z.object({
+      enabled: z.boolean().default(false),
+      triggerEveryN: z.number().default(10),
+    }).default({}),
     silent: z.boolean().default(false),
   }).optional(),
   watchState: z.object({
     lastGitCommit: z.string().optional(),
     lastScanAt: z.string().optional(),
     lastTranscriptAt: z.string().optional(),
+    entriesSinceLastSynthesis: z.number().optional(),
   }).optional(),
   lastExport: LastExportSchema,
 });

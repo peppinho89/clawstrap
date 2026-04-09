@@ -18,6 +18,9 @@ export interface WatchUI {
   scanFilesDone(): void;
   scanDone(namingStyle: string): void;
 
+  synthStart(): void;
+  synthDone(summary: string | null): void;
+
   showIdle(watchDir: string): void;
   clear(): void;
 }
@@ -65,6 +68,8 @@ class SilentUI implements WatchUI {
   scanFilesStart(): void {}
   scanFilesDone(): void {}
   scanDone(_namingStyle: string): void {}
+  synthStart(): void {}
+  synthDone(_summary: string | null): void {}
   showIdle(_watchDir: string): void {}
   clear(): void {}
 }
@@ -160,6 +165,27 @@ class RichUI implements WatchUI {
       row(T.branch, "Naming convention  ", namingStyle);
     }
     row(T.last, `Writing conventions.md...  ${T.check} done`);
+  }
+
+  // Memory synthesis ──────────────────────────────────────────────────────────
+
+  synthStart(): void {
+    this.spinner = ora({
+      text: `${T.branch} Synthesising memory...`,
+      prefixText: "",
+    }).start();
+  }
+
+  synthDone(summary: string | null): void {
+    if (this.spinner) {
+      if (summary) {
+        const preview = summary.length > 60 ? summary.slice(0, 60) + "…" : summary;
+        this.spinner.succeed(`${T.branch} Living summary updated  ${pc.dim(preview)}`);
+      } else {
+        this.spinner.fail(`${T.branch} Memory synthesis failed`);
+      }
+      this.spinner = null;
+    }
   }
 
   // Idle ──────────────────────────────────────────────────────────────────────

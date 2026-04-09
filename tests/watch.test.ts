@@ -15,6 +15,7 @@ import {
 } from "../src/watch/writers.js";
 import { runGitObserver } from "../src/watch/git.js";
 import { runScan } from "../src/watch/scan.js";
+import { synthesizeMemory } from "../src/watch/synthesize.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -596,5 +597,158 @@ describe("git observer polling", () => {
     expect(slowObserver).toHaveBeenCalledTimes(2);
 
     clearInterval(timer);
+  });
+});
+
+// ─── appendToMemory return value (issue #8) ──────────────────────────────────
+
+describe("appendToMemory return value", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+  });
+
+  afterEach(() => {
+    rmrf(tempDir);
+  });
+
+  it("returns the number of entries actually written", () => {
+    const written = appendToMemory(tempDir, ["Entry about testing patterns"], "git");
+    expect(written).toBe(1);
+  });
+
+  it("returns 0 when all entries are near-duplicates", () => {
+    const entry = "Prefer kebab-case for all file names in this project codebase";
+    appendToMemory(tempDir, [entry], "git");
+    const second = appendToMemory(tempDir, [entry], "git");
+    expect(second).toBe(0);
+  });
+
+  it("returns count of non-duplicate entries when batch is mixed", () => {
+    const entry = "Use kebab-case for all file names in this project codebase forever";
+    appendToMemory(tempDir, [entry], "git");
+    // Second call: same entry (dup) + new entry
+    const written = appendToMemory(
+      tempDir,
+      [entry, "Completely different entry about database migrations"],
+      "git"
+    );
+    expect(written).toBe(1);
+  });
+});
+
+// ─── synthesize.ts (issue #8) ────────────────────────────────────────────────
+
+describe("synthesizeMemory", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+  });
+
+  afterEach(() => {
+    rmrf(tempDir);
+  });
+
+  const memPath = () =>
+    path.join(tempDir, ".claude", "memory", "MEMORY.md");
+
+  it("returns null when MEMORY.md does not exist", async () => {
+    fs.rmSync(memPath());
+    const adapter = { complete: vi.fn(async () => "summary text") };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBeNull();
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("returns null when MEMORY.md has no entries", async () => {
+    // file exists but is empty
+    fs.writeFileSync(memPath(), "", "utf-8");
+    const adapter = { complete: vi.fn(async () => "summary text") };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBeNull();
+  });
+
+  it("calls adapter and writes Living Summary block to MEMORY.md", async () => {
+    appendToMemory(tempDir, ["Use kebab-case for all file names"], "git");
+    appendToMemory(tempDir, ["All tests use vitest framework"], "git");
+
+    const adapter = { complete: vi.fn(async () => "This workspace uses kebab-case and vitest.") };
+    const result = await synthesizeMemory(tempDir, adapter);
+
+    expect(result).toBe("This workspace uses kebab-case and vitest.");
+    expect(adapter.complete).toHaveBeenCalledOnce();
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:END -->");
+    expect(content).toContain("## Living Summary");
+    expect(content).toContain("This workspace uses kebab-case and vitest.");
+  });
+
+  it("replaces existing Living Summary block on second run", async () => {
+    appendToMemory(tempDir, ["Entry one about patterns"], "git");
+    const adapter = { complete: vi.fn() };
+
+    adapter.complete.mockResolvedValueOnce("First summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    adapter.complete.mockResolvedValueOnce("Updated summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("Updated summary.");
+    expect(content).not.toContain("First summary.");
+    // Only one synthesis block
+    expect(content.split("<!-- CLAWSTRAP:SYNTHESIS:START -->").length - 1).toBe(1);
+  });
+
+  it("preserves raw entries below the Living Summary block", async () => {
+    appendToMemory(tempDir, ["Raw entry that must be preserved"], "git");
+    const adapter = { complete: vi.fn(async () => "A summary.") };
+    await synthesizeMemory(tempDir, adapter);
+
+    const content = fs.readFileSync(memPath(), "utf-8");
+    expect(content).toContain("Raw entry that must be preserved");
+    expect(content).toContain("<!-- CLAWSTRAP:SYNTHESIS:START -->");
+  });
+
+  it("returns null and does not write when adapter throws", async () => {
+    appendToMemory(tempDir, ["Some entry"], "git");
+    const originalContent = fs.readFileSync(memPath(), "utf-8");
+
+    const adapter = { complete: vi.fn(async () => { throw new Error("LLM unavailable"); }) };
+    const result = await synthesizeMemory(tempDir, adapter);
+
+    expect(result).toBeNull();
+    // File should be unchanged
+    expect(fs.readFileSync(memPath(), "utf-8")).toBe(originalContent);
+  });
+
+  it("strips markdown code fences from adapter response", async () => {
+    appendToMemory(tempDir, ["Entry about code style"], "git");
+    const adapter = {
+      complete: vi.fn(async () => "```\nClean summary text.\n```"),
+    };
+    const result = await synthesizeMemory(tempDir, adapter);
+    expect(result).toBe("Clean summary text.");
+  });
+
+  it("passes existing summary to adapter on second run", async () => {
+    appendToMemory(tempDir, ["Entry one"], "git");
+    const adapter = { complete: vi.fn() };
+
+    adapter.complete.mockResolvedValueOnce("First summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    adapter.complete.mockResolvedValueOnce("Updated summary.");
+    await synthesizeMemory(tempDir, adapter);
+
+    // Second call's prompt should include the first summary
+    const secondCallPrompt = adapter.complete.mock.calls[1][0] as string;
+    expect(secondCallPrompt).toContain("First summary.");
   });
 });
