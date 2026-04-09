@@ -24,6 +24,9 @@ export interface WatchUI {
   inferStart(): void;
   inferDone(rulesCount: number | null): void;
 
+  promoteStart(): void;
+  promoteDone(rulesWritten: number): void;
+
   showIdle(watchDir: string): void;
   clear(): void;
 }
@@ -75,6 +78,8 @@ class SilentUI implements WatchUI {
   synthDone(_summary: string | null): void {}
   inferStart(): void {}
   inferDone(_rulesCount: number | null): void {}
+  promoteStart(): void {}
+  promoteDone(_rulesWritten: number): void {}
   showIdle(_watchDir: string): void {}
   clear(): void {}
 }
@@ -210,6 +215,27 @@ class RichUI implements WatchUI {
         this.spinner.succeed(`${T.branch} Architecture patterns inferred  ${pc.bold(String(rulesCount))} rules`);
       } else {
         this.spinner.fail(`${T.branch} Architecture inference failed`);
+      }
+      this.spinner = null;
+    }
+  }
+
+  // Correction promotion ──────────────────────────────────────────────────────
+
+  promoteStart(): void {
+    this.spinner?.stop();
+    this.spinner = ora({
+      text: `${T.branch} Promoting corrections to rule...`,
+      prefixText: "",
+    }).start();
+  }
+
+  promoteDone(rulesWritten: number): void {
+    if (this.spinner) {
+      if (rulesWritten > 0) {
+        this.spinner.succeed(`${T.branch} Draft rule written to .claude/rules/  ${T.check}`);
+      } else {
+        this.spinner.fail(`${T.branch} Rule promotion failed`);
       }
       this.spinner = null;
     }

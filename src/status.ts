@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadWorkspace } from "./load-workspace.js";
 import { isDaemonRunning } from "./watch/pid.js";
+import { countPendingRules } from "./watch/promote.js";
 
 const WORKLOAD_LABELS: Record<string, string> = {
   research: "Research & Analysis",
@@ -44,6 +45,7 @@ export async function showStatus(): Promise<void> {
   const ruleCount = countEntries(rulesDir);
 
   const date = config.createdAt.split("T")[0];
+  const pendingRules = countPendingRules(rootDir);
 
   console.log(`\nClawstrap Workspace: ${config.workspaceName}`);
   console.log(`Created: ${date} | Version: ${config.version}`);
@@ -64,6 +66,9 @@ export async function showStatus(): Promise<void> {
   console.log(`  Skills:   ${skillCount} (${systemDir}/skills/)`);
   console.log(`  Projects: ${projectCount} (projects/)`);
   console.log(`  Rules:    ${ruleCount} (${systemDir}/rules/)`);
+  if (pendingRules > 0) {
+    console.log(`  Pending rules: ${pendingRules}  (.claude/rules/ — review *-auto.md files)`);
+  }
 
   if (config.lastExport) {
     const exportDate = config.lastExport.exportedAt.split("T")[0];
