@@ -2,12 +2,20 @@
 
 Brief description of the change.
 
+## Related issue
+
+Closes #
+
 ## Type of change
 
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
+
+## How to test
+
+Steps a reviewer can follow to verify the change manually.
 
 ## Checklist
 

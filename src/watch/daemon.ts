@@ -41,13 +41,14 @@ export async function runDaemon(
     log(`[clawstrap watch] transcript: processing ${path.basename(filePath)}`);
     const result = await processTranscript(filePath, adapter);
     if (result) {
-      const { appendToMemory, appendToGotchaLog, appendToFutureConsiderations } = await import("./writers.js");
+      const { appendToMemory, appendToGotchaLog, appendToFutureConsiderations, appendToOpenThreads } = await import("./writers.js");
       if (result.decisions.length) appendToMemory(rootDir, result.decisions, "session");
       if (result.corrections.length) appendToGotchaLog(rootDir, result.corrections);
       if (result.deferredIdeas.length) appendToFutureConsiderations(rootDir, result.deferredIdeas);
+      if (result.openThreads.length) appendToOpenThreads(rootDir, result.openThreads);
       updateWatchState(rootDir, { lastTranscriptAt: new Date().toISOString() });
       log(
-        `[clawstrap watch] transcript: decisions=${result.decisions.length} corrections=${result.corrections.length}`
+        `[clawstrap watch] transcript: decisions=${result.decisions.length} corrections=${result.corrections.length} openThreads=${result.openThreads.length}`
       );
     }
   });
