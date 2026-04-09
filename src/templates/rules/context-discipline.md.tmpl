@@ -39,8 +39,16 @@ During batch work, the main session is an orchestrator only:
 
 ## Before Batch Work
 
-Always write an execution plan to `tmp/{task}/plan.md` before starting.
-This file must survive context loss and be readable by any future session.
+Always write an execution plan before starting batch work:
+- Path: `context/plan-{YYYY-MM-DD}-{task-slug}.md`
+- This file must survive context loss and be readable by any future session.
+
+Subagent output goes to `tmp/{task}/` — not `context/`.
+
+## Session Handoff
+
+Next-session plan goes to `context/next-session.md` (overwrite each time).
+QC results go to `context/qc-{YYYY-MM-DD}.md`.
 
 ## On User Correction
 

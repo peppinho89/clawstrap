@@ -8,5 +8,10 @@
   "parallelAgents": "single",
   "qualityLevel": "team",
   "sessionHandoff": true,
-  "sdd": true
+  "sdd": true,
+  "watch": {
+    "adapter": "claude-local",
+    "git": { "pollIntervalMinutes": 5 },
+    "scan": { "intervalDays": 7 }
+  }
 }

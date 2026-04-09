@@ -34,6 +34,19 @@ From most ephemeral to most durable:
 
 ---
 
+## Directory Map
+
+| Directory | Purpose | When Claude writes here |
+|-----------|---------|------------------------|
+| `artifacts/` | Architecture docs, ADRs, system overviews | After major design decisions; `artifacts/architecture.md` is the living system doc |
+| `context/` | Execution plans and session checkpoints | Before batch work → `context/plan-{date}-{task}.md`; every 5 ops → `context/checkpoint-{date}-{task}.md`; wrap-up → `context/next-session.md` |
+| `projects/` | Active sub-projects (copy `projects/_template/`) | When a feature track needs its own `process.md` |
+| `research/` | Reference material from external sources | When reading specs, docs, or papers worth keeping |
+| `tmp/` | Subagent output, session summaries (gitignored) | Summaries → `tmp/sessions/YYYY-MM-DD-HHmm.md`; subagent output → `tmp/{task}/` |
+| `.claude/memory/` | LLM-processed governance (fed by watch daemon) | Do not write directly — watch daemon only |
+
+---
+
 ## Context Discipline
 
 - Flush working state to file every 5 operations
@@ -48,9 +61,9 @@ Run this at every session end (mandatory, not optional):
 1. Save all work to SSOT files
 2. Sync derived files (rebuild from SSOTs)
 3. SSOT integrity check (no duplicates, no stale data)
-4. Update progress tracker
-5. Write next-session plan (with pre-execution hooks listed)
-6. Launch QC on work done this session
+4. Update progress tracker → `context/progress-{date}.md`
+5. Write next-session plan → `context/next-session.md`
+6. Launch QC on work done this session → write results to `context/qc-{date}.md`
 
 ---
 

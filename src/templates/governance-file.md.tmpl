@@ -53,13 +53,26 @@ From most ephemeral to most durable:
 
 ---
 
+## Directory Map
+
+| Directory | Purpose | When Claude writes here |
+|-----------|---------|------------------------|
+| `artifacts/` | Architecture docs, ADRs, system overviews | After major design decisions; `artifacts/architecture.md` is the living system doc |
+| `context/` | Execution plans and session checkpoints | Before batch work → `context/plan-{date}-{task}.md`; every 5 ops → `context/checkpoint-{date}-{task}.md`; wrap-up → `context/next-session.md` |
+{%#if sessionHandoff%}| `projects/` | Active sub-projects (copy `projects/_template/`) | When a feature track needs its own `process.md` |
+{%/if%}| `research/` | Reference material from external sources | When reading specs, docs, or papers worth keeping |
+| `tmp/` | Subagent output, session summaries (gitignored) | Summaries → `tmp/sessions/YYYY-MM-DD-HHmm.md`; subagent output → `tmp/{task}/` |
+| `{%systemDir%}/memory/` | LLM-processed governance (fed by watch daemon) | Do not write directly — watch daemon only |
+
+---
+
 ## Context Discipline
 
 - Flush working state to file {%flushCadence%}
 {%#if hasSubagents%}- Subagents write output to `tmp/{task}/{name}.json`; return one-line receipt
 - Main session reads subagent files ONLY if needed for the next step
 - Never hold raw batch results in conversation — write to disk first
-{%/if%}- Before batch work: write execution plan to file (survives context loss)
+{%/if%}- Before batch work: write execution plan to `context/plan-{date}-{task}.md` (survives context loss)
 
 ---
 {%#if sessionHandoff%}
@@ -70,9 +83,9 @@ Run this at every session end (mandatory, not optional):
 1. Save all work to SSOT files
 2. Sync derived files (rebuild from SSOTs)
 3. SSOT integrity check (no duplicates, no stale data)
-4. Update progress tracker
-5. Write next-session plan (with pre-execution hooks listed)
-6. Launch QC on work done this session
+4. Update progress tracker → `context/progress-{date}.md`
+5. Write next-session plan → `context/next-session.md`
+6. Launch QC on work done this session → write results to `context/qc-{date}.md`
 
 ---
 {%/if%}

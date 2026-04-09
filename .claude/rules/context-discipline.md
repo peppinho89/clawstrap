@@ -6,12 +6,20 @@
 Flush working state to file every 5 operations:
 - Write current state to a context checkpoint file
 - Include: what's done, what's next, accumulated results
-- Path: `context/checkpoint-{date}-{task}.md`
+- Path: `context/checkpoint-{YYYY-MM-DD}-{task-slug}.md`
 
 ## Before Batch Work
 
-Always write an execution plan to `tmp/{task}/plan.md` before starting.
-This file must survive context loss and be readable by any future session.
+Always write an execution plan before starting batch work:
+- Path: `context/plan-{YYYY-MM-DD}-{task-slug}.md`
+- This file must survive context loss and be readable by any future session.
+
+Subagent output goes to `tmp/{task}/` — not `context/`.
+
+## Session Handoff
+
+Next-session plan goes to `context/next-session.md` (overwrite each time).
+QC results go to `context/qc-{YYYY-MM-DD}.md`.
 
 ## On User Correction
 
