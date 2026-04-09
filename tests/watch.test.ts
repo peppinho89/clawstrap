@@ -1082,7 +1082,11 @@ describe("checkAndPromoteCorrections", () => {
     fs.writeFileSync(logPath, content, "utf-8");
   }
 
-  beforeEach(() => { tempDir = makeTempDir(); });
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    // Reset all mocks between tests to prevent cross-test call-count pollution
+    vi.clearAllMocks();
+  });
   afterEach(() => { fs.rmSync(tempDir, { recursive: true, force: true }); });
 
   it("does nothing when gotcha-log does not exist", async () => {
@@ -1174,6 +1178,92 @@ describe("checkAndPromoteCorrections", () => {
       ? fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"))
       : [];
     expect(files).toHaveLength(0);
+  });
+
+  it("calls promoteDone(0) when adapter returns unparseable response", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue("not a valid format at all") };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(0);
+  });
+
+  it("calls promoteStart() before adapter and promoteDone(1) after successful write", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    expect(silentUI.promoteStart).toHaveBeenCalledOnce();
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(1);
+  });
+
+  it("rule file has # Title heading format", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const file = fs.readdirSync(rulesDir).find((f) => f.endsWith("-auto.md"))!;
+    const content = fs.readFileSync(path.join(rulesDir, file), "utf-8");
+    expect(content).toContain("# Always validate inputs");
+  });
+
+  it("adapter prompt includes correction texts", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const prompt: string = adapter.complete.mock.calls[0][0];
+    expect(prompt).toContain("Always validate user input before processing request data form");
+    expect(prompt).toContain("TITLE:");
+    expect(prompt).toContain("PRINCIPLE:");
+    expect(prompt).toContain("IMPERATIVES:");
+  });
+
+  it("slug filename is derived from correction tokens and ends with -auto.md", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const adapter = { complete: vi.fn().mockResolvedValue(validResponse) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"));
+    expect(files).toHaveLength(1);
+    // Slug should be kebab-case tokens from the correction text (no spaces or special chars)
+    expect(files[0]).toMatch(/^[a-z0-9-]+-auto\.md$/);
+  });
+
+  it("parseRuleResponse returns null when TITLE is missing", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const noTitle = "PRINCIPLE: All external inputs must be validated.\nIMPERATIVES:\n- Validate at system boundaries\n- Never trust user input\n";
+    const adapter = { complete: vi.fn().mockResolvedValue(noTitle) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.existsSync(rulesDir)
+      ? fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"))
+      : [];
+    expect(files).toHaveLength(0);
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(0);
+  });
+
+  it("parseRuleResponse returns null when PRINCIPLE is missing", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const noPrinciple = "TITLE: Always validate inputs\nIMPERATIVES:\n- Validate at system boundaries\n- Never trust user input\n";
+    const adapter = { complete: vi.fn().mockResolvedValue(noPrinciple) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.existsSync(rulesDir)
+      ? fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"))
+      : [];
+    expect(files).toHaveLength(0);
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(0);
+  });
+
+  it("parseRuleResponse returns null when IMPERATIVES section is missing", async () => {
+    writeSimilarCorrections(tempDir, 3);
+    const noImperatives = "TITLE: Always validate inputs\nPRINCIPLE: All external inputs must be validated.";
+    const adapter = { complete: vi.fn().mockResolvedValue(noImperatives) };
+    await checkAndPromoteCorrections(tempDir, adapter, silentUI);
+    const rulesDir = path.join(tempDir, ".claude", "rules");
+    const files = fs.existsSync(rulesDir)
+      ? fs.readdirSync(rulesDir).filter((f) => f.endsWith("-auto.md"))
+      : [];
+    expect(files).toHaveLength(0);
+    expect(silentUI.promoteDone).toHaveBeenCalledWith(0);
   });
 });
 
