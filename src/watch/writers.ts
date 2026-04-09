@@ -8,6 +8,7 @@ export interface ConventionSections {
   testing: string[];
   errorHandling: string[];
   comments: string[];
+  architecture?: string[]; // LLM-inferred; omitted when inference is skipped or fails
 }
 
 function formatEntry(source: string, text: string): string {
@@ -146,6 +147,12 @@ function buildAutoBlock(sections: ConventionSections): string {
     for (const item of sections.comments) lines.push(`- ${item}`);
   } else {
     lines.push("- No comment patterns detected.");
+  }
+
+  if (sections.architecture && sections.architecture.length > 0) {
+    lines.push("");
+    lines.push("## Architecture & Design Patterns");
+    for (const item of sections.architecture) lines.push(`- ${item}`);
   }
 
   lines.push(AUTO_END);

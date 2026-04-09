@@ -5,6 +5,7 @@ import { runGitObserver } from "./git.js";
 import { runScan } from "./scan.js";
 import { writeConventions } from "./writers.js";
 import { synthesizeMemory } from "./synthesize.js";
+import { inferArchitecturePatterns } from "./infer.js";
 import { watchTranscriptDir, processTranscript } from "./transcripts.js";
 import { createAdapter } from "./adapters/index.js";
 import { clearPid } from "./pid.js";
@@ -115,6 +116,14 @@ export async function runDaemon(
     ui.scanFilesStart();
     const sections = await runScan(rootDir);
     ui.scanFilesDone();
+
+    if (config.watch?.adapter) {
+      ui.inferStart();
+      const rules = await inferArchitecturePatterns(rootDir, sections, adapter);
+      ui.inferDone(rules.length > 0 ? rules.length : null);
+      if (rules.length > 0) sections.architecture = rules;
+    }
+
     writeConventions(rootDir, sections);
     updateWatchState(rootDir, { lastScanAt: new Date().toISOString() });
     ui.scanDone(sections.naming[0] ?? "");

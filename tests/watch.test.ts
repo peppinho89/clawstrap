@@ -16,6 +16,7 @@ import {
 import { runGitObserver } from "../src/watch/git.js";
 import { runScan } from "../src/watch/scan.js";
 import { synthesizeMemory } from "../src/watch/synthesize.js";
+import { inferArchitecturePatterns } from "../src/watch/infer.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -356,6 +357,35 @@ describe("writers", () => {
     expect(result).not.toContain("old naming");
     // New auto content is present
     expect(result).toContain("kebab-case dominant");
+  });
+
+  it("writeConventions includes Architecture section when architecture rules provided", () => {
+    const conventionsPath = path.join(tempDir, ".claude", "rules", "conventions.md");
+    writeConventions(tempDir, {
+      ...sampleSections,
+      architecture: [
+        "Always isolate external I/O in adapters/ files",
+        "Never call services directly from CLI handlers",
+      ],
+    });
+    const content = fs.readFileSync(conventionsPath, "utf-8");
+    expect(content).toContain("## Architecture & Design Patterns");
+    expect(content).toContain("Always isolate external I/O in adapters/ files");
+    expect(content).toContain("Never call services directly from CLI handlers");
+  });
+
+  it("writeConventions omits Architecture section when architecture is absent", () => {
+    const conventionsPath = path.join(tempDir, ".claude", "rules", "conventions.md");
+    writeConventions(tempDir, sampleSections);
+    const content = fs.readFileSync(conventionsPath, "utf-8");
+    expect(content).not.toContain("## Architecture & Design Patterns");
+  });
+
+  it("writeConventions omits Architecture section when architecture is empty array", () => {
+    const conventionsPath = path.join(tempDir, ".claude", "rules", "conventions.md");
+    writeConventions(tempDir, { ...sampleSections, architecture: [] });
+    const content = fs.readFileSync(conventionsPath, "utf-8");
+    expect(content).not.toContain("## Architecture & Design Patterns");
   });
 });
 
@@ -861,6 +891,131 @@ describe("synthesis counter logic", () => {
       expect(total).toBe(3);
     } finally {
       fs.rmSync(tempDir2, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── infer.ts (issue #6) ─────────────────────────────────────────────────────
+
+describe("inferArchitecturePatterns", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+  });
+
+  afterEach(() => {
+    rmrf(tempDir);
+  });
+
+  const syntacticSections = {
+    naming: ["kebab-case dominant"],
+    imports: ["100% relative imports"],
+    testing: ["*.test.ts pattern"],
+    errorHandling: ["try/catch dominant"],
+    comments: ["moderate density"],
+  };
+
+  it("returns empty array when fewer than 3 code files exist", async () => {
+    // tempDir has no source files
+    const adapter = { complete: vi.fn(async () => "Always do something.") };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toEqual([]);
+    expect(adapter.complete).not.toHaveBeenCalled();
+  });
+
+  it("calls adapter and returns parsed rules when enough files exist", async () => {
+    // Create 3+ source files
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(
+        path.join(tempDir, name),
+        "export function foo() { return 1; }\n",
+        "utf-8"
+      );
+    }
+    const adapter = {
+      complete: vi.fn(async () =>
+        "Always isolate I/O in adapters/ files\nNever call services directly from CLI\nWhen handling errors, always wrap with context"
+      ),
+    };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toMatch(/^Always/);
+    expect(result[1]).toMatch(/^Never/);
+    expect(result[2]).toMatch(/^When/);
+    expect(adapter.complete).toHaveBeenCalledOnce();
+  });
+
+  it("filters out lines that do not start with Always/Never/When", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = {
+      complete: vi.fn(async () =>
+        "Here are the rules:\nAlways use kebab-case\nThis is not a rule\nNever import barrel files"
+      ),
+    };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toHaveLength(2);
+    expect(result).toContain("Always use kebab-case");
+    expect(result).toContain("Never import barrel files");
+  });
+
+  it("strips markdown code fences and leading list markers from adapter response", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = {
+      complete: vi.fn(async () =>
+        "```\n1. Always prefer composition over inheritance\n- Never mutate shared state\n```"
+      ),
+    };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toContain("Always prefer composition over inheritance");
+    expect(result).toContain("Never mutate shared state");
+  });
+
+  it("returns empty array when adapter throws", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = {
+      complete: vi.fn(async () => { throw new Error("LLM unavailable"); }),
+    };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toEqual([]);
+  });
+
+  it("excludes test files from the sample sent to adapter", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    fs.writeFileSync(
+      path.join(tempDir, "a.test.ts"),
+      "it('test', () => {})\n",
+      "utf-8"
+    );
+    const adapter = { complete: vi.fn(async () => "Always write tests.") };
+    await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+
+    if (adapter.complete.mock.calls.length > 0) {
+      const prompt = adapter.complete.mock.calls[0][0] as string;
+      expect(prompt).not.toContain("a.test.ts");
+    }
+  });
+
+  it("includes syntactic findings in the prompt", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = { complete: vi.fn(async () => "Always use kebab-case.") };
+    await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+
+    if (adapter.complete.mock.calls.length > 0) {
+      const prompt = adapter.complete.mock.calls[0][0] as string;
+      expect(prompt).toContain("kebab-case dominant");
+      expect(prompt).toContain("try/catch dominant");
     }
   });
 });

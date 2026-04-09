@@ -21,6 +21,9 @@ export interface WatchUI {
   synthStart(): void;
   synthDone(summary: string | null): void;
 
+  inferStart(): void;
+  inferDone(rulesCount: number | null): void;
+
   showIdle(watchDir: string): void;
   clear(): void;
 }
@@ -70,6 +73,8 @@ class SilentUI implements WatchUI {
   scanDone(_namingStyle: string): void {}
   synthStart(): void {}
   synthDone(_summary: string | null): void {}
+  inferStart(): void {}
+  inferDone(_rulesCount: number | null): void {}
   showIdle(_watchDir: string): void {}
   clear(): void {}
 }
@@ -184,6 +189,27 @@ class RichUI implements WatchUI {
         this.spinner.succeed(`${T.branch} Living summary updated  ${pc.dim(preview)}`);
       } else {
         this.spinner.fail(`${T.branch} Memory synthesis failed`);
+      }
+      this.spinner = null;
+    }
+  }
+
+  // Architecture inference ────────────────────────────────────────────────────
+
+  inferStart(): void {
+    this.spinner?.stop();
+    this.spinner = ora({
+      text: `${T.branch} Inferring architecture patterns...`,
+      prefixText: "",
+    }).start();
+  }
+
+  inferDone(rulesCount: number | null): void {
+    if (this.spinner) {
+      if (rulesCount !== null && rulesCount > 0) {
+        this.spinner.succeed(`${T.branch} Architecture patterns inferred  ${pc.bold(String(rulesCount))} rules`);
+      } else {
+        this.spinner.fail(`${T.branch} Architecture inference failed`);
       }
       this.spinner = null;
     }
