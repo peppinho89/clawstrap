@@ -59,6 +59,9 @@ export async function runDaemon(
   cleanup.push(stopTranscripts);
 
   // 3. Periodic git polling
+  // Note: lastGitCommit is tracked in-memory. If .clawstrap.json is externally
+  // edited between ticks the in-memory value takes precedence; the config file
+  // is reconciled on the next successful poll write.
   let gitRunning = false;
   const pollIntervalMinutes = config.watch?.git?.pollIntervalMinutes ?? 5;
   const gitPollTimer = setInterval(async () => {
@@ -67,9 +70,10 @@ export async function runDaemon(
     try {
       const result = await runGitObserver(rootDir, lastGitCommit);
       if (result && result.entriesWritten > 0) {
-        ui.gitStart();
-        ui.gitDone({ entriesWritten: result.entriesWritten, lastCommit: result.lastCommit });
+        ui.gitPollDone({ entriesWritten: result.entriesWritten, lastCommit: result.lastCommit });
       }
+      // Always advance lastGitCommit (even when entriesWritten === 0) so the
+      // next tick does not re-process the same zero-entry commits.
       if (result) {
         lastGitCommit = result.lastCommit;
         updateWatchState(rootDir, { lastGitCommit: result.lastCommit });
