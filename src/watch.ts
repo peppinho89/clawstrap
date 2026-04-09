@@ -7,6 +7,8 @@ import { runScan } from "./watch/scan.js";
 import { writeConventions } from "./watch/writers.js";
 import { runDaemon } from "./watch/daemon.js";
 import { createUI } from "./watch/ui.js";
+import { inferArchitecturePatterns } from "./watch/infer.js";
+import { createAdapter } from "./watch/adapters/index.js";
 
 export async function watch(options: {
   stop?: boolean;
@@ -45,6 +47,15 @@ export async function watch(options: {
     ui.scanFilesStart();
     const sections = await runScan(rootDir);
     ui.scanFilesDone();
+
+    if (config.watch?.adapter) {
+      const adapter = createAdapter(config);
+      ui.inferStart();
+      const rules = await inferArchitecturePatterns(rootDir, sections, adapter);
+      ui.inferDone(rules.length > 0 ? rules.length : null);
+      if (rules.length > 0) sections.architecture = rules;
+    }
+
     writeConventions(rootDir, sections);
     persistWatchState(rootDir, { lastScanAt: new Date().toISOString() });
     ui.scanDone(sections.naming[0] ?? "");
