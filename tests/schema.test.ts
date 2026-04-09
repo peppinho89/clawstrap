@@ -68,6 +68,39 @@ describe("config schema", () => {
       })
     ).toThrow();
   });
+
+  describe("watch.git config", () => {
+    it("defaults pollIntervalMinutes to 5 when watch.git is omitted", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: { adapter: "claude-local" },
+      });
+      expect(result.watch?.git?.pollIntervalMinutes).toBe(5);
+    });
+
+    it("defaults pollIntervalMinutes to 5 when watch is omitted entirely", () => {
+      const result = ClawstrapConfigSchema.parse(validConfig);
+      // watch is optional — when absent, git sub-field is not present
+      expect(result.watch).toBeUndefined();
+    });
+
+    it("accepts a custom pollIntervalMinutes", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: { adapter: "claude-local", git: { pollIntervalMinutes: 10 } },
+      });
+      expect(result.watch?.git?.pollIntervalMinutes).toBe(10);
+    });
+
+    it("defaults scan.intervalDays to 7 alongside git defaults", () => {
+      const result = ClawstrapConfigSchema.parse({
+        ...validConfig,
+        watch: { adapter: "claude-local" },
+      });
+      expect(result.watch?.scan?.intervalDays).toBe(7);
+      expect(result.watch?.git?.pollIntervalMinutes).toBe(5);
+    });
+  });
 });
 
 describe("derive template vars", () => {

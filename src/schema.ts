@@ -35,6 +35,9 @@ export const ClawstrapConfigSchema = z.object({
     scan: z.object({
       intervalDays: z.number().default(7),
     }).default({}),
+    git: z.object({
+      pollIntervalMinutes: z.number().default(5),
+    }).default({}),
     silent: z.boolean().default(false),
   }).optional(),
   watchState: z.object({

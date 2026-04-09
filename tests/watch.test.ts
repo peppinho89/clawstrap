@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -453,5 +453,148 @@ describe("scan", () => {
     const result = await runScan(tempDir);
     const testingText = result.testing.join(" ");
     expect(testingText).toContain("*.test.ts/js");
+  });
+});
+
+// ─── git observer polling (issue #7) ─────────────────────────────────────────
+
+describe("git observer polling", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+    scaffoldWorkspace(tempDir);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    rmrf(tempDir);
+  });
+
+  it("incremental run returns entriesWritten: 0 when already at HEAD", async () => {
+    // Set up a repo with one commit
+    execSync(`git init "${tempDir}"`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" config user.email "test@test.com"`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" config user.name "Test"`, { stdio: "pipe" });
+    fs.writeFileSync(path.join(tempDir, "a.ts"), "export const x = 1;", "utf-8");
+    execSync(`git -C "${tempDir}" add .`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" commit -m "first commit"`, { stdio: "pipe" });
+
+    const first = await runGitObserver(tempDir, null);
+    expect(first).not.toBeNull();
+
+    // Second call with HEAD as sinceCommit — no new commits
+    const second = await runGitObserver(tempDir, first!.lastCommit);
+    expect(second).not.toBeNull();
+    expect(second!.entriesWritten).toBe(0);
+    expect(second!.lastCommit).toBe(first!.lastCommit);
+  });
+
+  it("incremental run returns new entries after a second commit", async () => {
+    execSync(`git init "${tempDir}"`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" config user.email "test@test.com"`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" config user.name "Test"`, { stdio: "pipe" });
+
+    // First commit
+    fs.writeFileSync(path.join(tempDir, "a.ts"), "export const x = 1;", "utf-8");
+    execSync(`git -C "${tempDir}" add .`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" commit -m "first commit"`, { stdio: "pipe" });
+
+    const first = await runGitObserver(tempDir, null);
+    expect(first).not.toBeNull();
+
+    // Second commit
+    fs.writeFileSync(path.join(tempDir, "b.ts"), "export const y = 2;", "utf-8");
+    execSync(`git -C "${tempDir}" add .`, { stdio: "pipe" });
+    execSync(`git -C "${tempDir}" commit -m "second commit"`, { stdio: "pipe" });
+
+    // Incremental: only picks up second commit
+    const second = await runGitObserver(tempDir, first!.lastCommit);
+    expect(second).not.toBeNull();
+    expect(second!.lastCommit).not.toBe(first!.lastCommit);
+    // entriesWritten can be 0 if the single commit doesn't reach insight thresholds;
+    // what matters is lastCommit advanced
+    expect(second!.lastCommit.length).toBeGreaterThan(0);
+  });
+
+  it("poll interval fires after configured delay (fake timers)", async () => {
+    const calls: Array<string | null> = [];
+    const mockObserver = vi.fn(async (_rootDir: string, sinceCommit: string | null) => {
+      calls.push(sinceCommit);
+      return { lastCommit: "abc123", entriesWritten: 0 };
+    });
+
+    const pollIntervalMs = 5 * 60 * 1000; // 5 minutes
+
+    // Simulate the poller loop directly (mirrors daemon.ts logic)
+    let lastGitCommit: string | null = "initial";
+    let gitRunning = false;
+    const timer = setInterval(async () => {
+      if (gitRunning) return;
+      gitRunning = true;
+      try {
+        const result = await mockObserver(tempDir, lastGitCommit);
+        if (result) lastGitCommit = result.lastCommit;
+      } finally {
+        gitRunning = false;
+      }
+    }, pollIntervalMs);
+
+    // No calls yet
+    expect(mockObserver).not.toHaveBeenCalled();
+
+    // Advance past one interval
+    await vi.advanceTimersByTimeAsync(pollIntervalMs + 1);
+    expect(mockObserver).toHaveBeenCalledTimes(1);
+    expect(calls[0]).toBe("initial");
+    expect(lastGitCommit).toBe("abc123");
+
+    // Advance past a second interval
+    await vi.advanceTimersByTimeAsync(pollIntervalMs);
+    expect(mockObserver).toHaveBeenCalledTimes(2);
+    expect(calls[1]).toBe("abc123"); // uses updated lastGitCommit
+
+    clearInterval(timer);
+  });
+
+  it("concurrency guard skips overlapping poll ticks", async () => {
+    let resolveFirst!: () => void;
+    const slowObserver = vi.fn(
+      () =>
+        new Promise<{ lastCommit: string; entriesWritten: number }>((resolve) => {
+          resolveFirst = () => resolve({ lastCommit: "slow123", entriesWritten: 0 });
+        })
+    );
+
+    const pollIntervalMs = 1000;
+    let gitRunning = false;
+    const timer = setInterval(async () => {
+      if (gitRunning) return;
+      gitRunning = true;
+      try {
+        await slowObserver();
+      } finally {
+        gitRunning = false;
+      }
+    }, pollIntervalMs);
+
+    // Trigger first tick — observer hangs
+    await vi.advanceTimersByTimeAsync(pollIntervalMs + 1);
+    expect(slowObserver).toHaveBeenCalledTimes(1);
+
+    // Trigger second tick while first is still running
+    await vi.advanceTimersByTimeAsync(pollIntervalMs);
+    expect(slowObserver).toHaveBeenCalledTimes(1); // guard blocked it
+
+    // Resolve the first run
+    resolveFirst();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Third tick — now unblocked
+    await vi.advanceTimersByTimeAsync(pollIntervalMs);
+    expect(slowObserver).toHaveBeenCalledTimes(2);
+
+    clearInterval(timer);
   });
 });

@@ -6,6 +6,7 @@ export interface WatchUI {
 
   gitStart(): void;
   gitDone(result: { entriesWritten: number; lastCommit: string } | null): void;
+  gitPollDone(result: { entriesWritten: number; lastCommit: string }): void;
 
   transcriptStart(filename: string): void;
   llmCallStart(): void;
@@ -55,6 +56,7 @@ class SilentUI implements WatchUI {
   daemonStarted(): void {}
   gitStart(): void {}
   gitDone(_result: { entriesWritten: number; lastCommit: string } | null): void {}
+  gitPollDone(_result: { entriesWritten: number; lastCommit: string }): void {}
   transcriptStart(_filename: string): void {}
   llmCallStart(): void {}
   llmCallDone(_counts: { decisions: number; corrections: number; openThreads: number } | null): void {}
@@ -90,6 +92,14 @@ class RichUI implements WatchUI {
     row(T.branch, "Last processed commit", result.lastCommit.slice(0, 7));
     row(T.branch, "Entries written", String(result.entriesWritten));
     row(T.last, `Writing to MEMORY.md...  ${T.check} done`);
+  }
+
+  gitPollDone(result: { entriesWritten: number; lastCommit: string }): void {
+    const time = new Date().toTimeString().slice(0, 5);
+    process.stdout.write(
+      `\n${pc.cyan("◆")}  ${pc.bold("Git:")}  +${result.entriesWritten} entr${result.entriesWritten === 1 ? "y" : "ies"} written` +
+      `  ${pc.dim(result.lastCommit.slice(0, 7))}  ${pc.dim(time)}\n`
+    );
   }
 
   // Transcript ────────────────────────────────────────────────────────────────

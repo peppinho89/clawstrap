@@ -32,6 +32,7 @@ export async function runDaemon(
   ui.gitStart();
   const gitResult = await runGitObserver(rootDir, sinceCommit);
   ui.gitDone(gitResult ? { entriesWritten: gitResult.entriesWritten, lastCommit: gitResult.lastCommit } : null);
+  let lastGitCommit: string | null = gitResult?.lastCommit ?? sinceCommit;
   if (gitResult) {
     updateWatchState(rootDir, { lastGitCommit: gitResult.lastCommit });
   }
@@ -57,7 +58,33 @@ export async function runDaemon(
   });
   cleanup.push(stopTranscripts);
 
-  // 3. Periodic convention scan
+  // 3. Periodic git polling
+  // Note: lastGitCommit is tracked in-memory. If .clawstrap.json is externally
+  // edited between ticks the in-memory value takes precedence; the config file
+  // is reconciled on the next successful poll write.
+  let gitRunning = false;
+  const pollIntervalMinutes = config.watch?.git?.pollIntervalMinutes ?? 5;
+  const gitPollTimer = setInterval(async () => {
+    if (gitRunning) return;
+    gitRunning = true;
+    try {
+      const result = await runGitObserver(rootDir, lastGitCommit);
+      if (result && result.entriesWritten > 0) {
+        ui.gitPollDone({ entriesWritten: result.entriesWritten, lastCommit: result.lastCommit });
+      }
+      // Always advance lastGitCommit (even when entriesWritten === 0) so the
+      // next tick does not re-process the same zero-entry commits.
+      if (result) {
+        lastGitCommit = result.lastCommit;
+        updateWatchState(rootDir, { lastGitCommit: result.lastCommit });
+      }
+    } finally {
+      gitRunning = false;
+    }
+  }, pollIntervalMinutes * 60 * 1000);
+  cleanup.push(() => clearInterval(gitPollTimer));
+
+  // 4. Periodic convention scan
   const intervalDays = config.watch?.scan?.intervalDays ?? 7;
   const lastScan = config.watchState?.lastScanAt ? new Date(config.watchState.lastScanAt) : null;
   const msSinceLastScan = lastScan ? Date.now() - lastScan.getTime() : Infinity;
