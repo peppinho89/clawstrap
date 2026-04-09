@@ -11,7 +11,15 @@
   "sdd": true,
   "watch": {
     "adapter": "claude-local",
-    "git": { "pollIntervalMinutes": 5 },
-    "scan": { "intervalDays": 7 }
+    "git": {
+      "pollIntervalMinutes": 5
+    },
+    "scan": {
+      "intervalDays": 7
+    }
+  },
+  "watchState": {
+    "lastGitCommit": "5cb2505aec8b3b8371dc2cfa59bcbed3fbf9d80d",
+    "lastScanAt": "2026-04-09T23:12:53.700Z"
   }
 }

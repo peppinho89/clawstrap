@@ -55,7 +55,7 @@ export async function init(
 
   // Build config
   const config: ClawstrapConfig = ClawstrapConfigSchema.parse({
-    version: "1.4.2",
+    version: "1.5.1",
     createdAt: new Date().toISOString(),
     workspaceName: answers.workspaceName,
     targetDirectory: directory,

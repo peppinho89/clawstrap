@@ -102,3 +102,25 @@ This workspace uses SDD. Before implementing any feature:
 3. Implement from the approved spec — not from the conversation
 
 Rule details: `.claude/rules/sdd.md`
+
+<!-- CLAWSTRAP:WATCH -->
+## Session Watch Hook
+
+`clawstrap watch` is active. At every session end, write a session summary to
+`tmp/sessions/YYYY-MM-DD-HHmm.md` using this format:
+
+```
+## Decisions
+- [what approach was chosen and why]
+
+## Corrections
+- [what the agent got wrong and how it was fixed]
+
+## Deferred Ideas
+- [mentioned but not acted on]
+
+## Open Threads
+- [unresolved questions or next steps]
+```
+
+The watch daemon picks this up automatically and updates MEMORY.md and gotcha-log.md.
