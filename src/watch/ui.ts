@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import pc from "picocolors";
 import ora, { type Ora } from "ora";
 
 export interface WatchUI {
@@ -35,17 +35,17 @@ function formatAgo(date: Date | null): string {
 }
 
 const T = {
-  branch: chalk.gray("├─"),
-  last:   chalk.gray("└─"),
-  check:  chalk.green("✓"),
+  branch: pc.gray("├─"),
+  last:   pc.gray("└─"),
+  check:  pc.green("✓"),
 };
 
 function header(label: string): void {
-  process.stdout.write(`\n${chalk.cyan("◆")}  ${chalk.bold(label)}\n`);
+  process.stdout.write(`\n${pc.cyan("◆")}  ${pc.bold(label)}\n`);
 }
 
 function row(connector: string, label: string, value?: string): void {
-  const val = value !== undefined ? `  ${chalk.bold(value)}` : "";
+  const val = value !== undefined ? `  ${pc.bold(value)}` : "";
   process.stdout.write(`${connector} ${label}${val}\n`);
 }
 
@@ -73,7 +73,7 @@ class RichUI implements WatchUI {
   private spinner: Ora | null = null;
 
   daemonStarted(): void {
-    process.stdout.write(`\n${chalk.cyan("clawstrap watch")} ${chalk.dim("daemon started")}\n`);
+    process.stdout.write(`\n${pc.cyan("clawstrap watch")} ${pc.dim("daemon started")}\n`);
   }
 
   // Git observer ──────────────────────────────────────────────────────────────
@@ -84,7 +84,7 @@ class RichUI implements WatchUI {
 
   gitDone(result: { entriesWritten: number; lastCommit: string } | null): void {
     if (!result) {
-      row(T.last, chalk.dim("No new commits found."));
+      row(T.last, pc.dim("No new commits found."));
       return;
     }
     row(T.branch, "Last processed commit", result.lastCommit.slice(0, 7));
@@ -95,7 +95,7 @@ class RichUI implements WatchUI {
   // Transcript ────────────────────────────────────────────────────────────────
 
   transcriptStart(filename: string): void {
-    header(`New session summary detected  ${chalk.cyan(filename)}`);
+    header(`New session summary detected  ${pc.cyan(filename)}`);
   }
 
   llmCallStart(): void {
@@ -128,7 +128,7 @@ class RichUI implements WatchUI {
   // Convention scan ───────────────────────────────────────────────────────────
 
   scanStart(lastRunAt: Date | null): void {
-    header(`Convention scan  ${chalk.dim(`(last run: ${formatAgo(lastRunAt)})`)}`)
+    header(`Convention scan  ${pc.dim(`(last run: ${formatAgo(lastRunAt)})`)}`)
   }
 
   scanFilesStart(): void {
@@ -155,8 +155,8 @@ class RichUI implements WatchUI {
   // Idle ──────────────────────────────────────────────────────────────────────
 
   showIdle(watchDir: string): void {
-    process.stdout.write(`\n${chalk.dim("◇")}  ${chalk.dim("Watching for changes...")}\n`);
-    row(T.last, chalk.dim("Transcripts"), chalk.dim(watchDir + "  (listening)"));
+    process.stdout.write(`\n${pc.dim("◇")}  ${pc.dim("Watching for changes...")}\n`);
+    row(T.last, pc.dim("Transcripts"), pc.dim(watchDir + "  (listening)"));
     process.stdout.write("\n");
   }
 
