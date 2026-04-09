@@ -7,39 +7,44 @@ import { writeConventions } from "./writers.js";
 import { watchTranscriptDir, processTranscript } from "./transcripts.js";
 import { createAdapter } from "./adapters/index.js";
 import { clearPid } from "./pid.js";
+import type { WatchUI } from "./ui.js";
 
 export async function runDaemon(
   rootDir: string,
-  config: ClawstrapConfig
+  config: ClawstrapConfig,
+  ui: WatchUI
 ): Promise<void> {
-  const silent = config.watch?.silent ?? false;
-  const log = silent ? () => {} : (msg: string) => process.stdout.write(msg + "\n");
-
   // Graceful shutdown
   const cleanup: Array<() => void> = [];
   const shutdown = () => {
     cleanup.forEach((fn) => fn());
+    ui.clear();
     clearPid(rootDir);
     process.exit(0);
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 
-  log("[clawstrap watch] daemon started");
+  ui.daemonStarted();
 
   // 1. Git observer (cold start or incremental)
   const sinceCommit = config.watchState?.lastGitCommit ?? null;
+  ui.gitStart();
   const gitResult = await runGitObserver(rootDir, sinceCommit);
+  ui.gitDone(gitResult ? { entriesWritten: gitResult.entriesWritten, lastCommit: gitResult.lastCommit } : null);
   if (gitResult) {
     updateWatchState(rootDir, { lastGitCommit: gitResult.lastCommit });
-    log(`[clawstrap watch] git: ${gitResult.entriesWritten} entries written`);
   }
 
   // 2. Transcript watcher
   const adapter = createAdapter(config);
   const stopTranscripts = watchTranscriptDir(rootDir, async (filePath) => {
-    log(`[clawstrap watch] transcript: processing ${path.basename(filePath)}`);
+    ui.transcriptStart(path.basename(filePath));
+    ui.llmCallStart();
     const result = await processTranscript(filePath, adapter);
+    ui.llmCallDone(result
+      ? { decisions: result.decisions.length, corrections: result.corrections.length, openThreads: result.openThreads.length }
+      : null);
     if (result) {
       const { appendToMemory, appendToGotchaLog, appendToFutureConsiderations, appendToOpenThreads } = await import("./writers.js");
       if (result.decisions.length) appendToMemory(rootDir, result.decisions, "session");
@@ -47,9 +52,7 @@ export async function runDaemon(
       if (result.deferredIdeas.length) appendToFutureConsiderations(rootDir, result.deferredIdeas);
       if (result.openThreads.length) appendToOpenThreads(rootDir, result.openThreads);
       updateWatchState(rootDir, { lastTranscriptAt: new Date().toISOString() });
-      log(
-        `[clawstrap watch] transcript: decisions=${result.decisions.length} corrections=${result.corrections.length} openThreads=${result.openThreads.length}`
-      );
+      ui.transcriptWriteDone();
     }
   });
   cleanup.push(stopTranscripts);
@@ -61,11 +64,13 @@ export async function runDaemon(
   const scanIntervalMs = intervalDays * 24 * 60 * 60 * 1000;
 
   const doScan = async () => {
-    log("[clawstrap watch] scan: running convention scan...");
+    ui.scanStart(lastScan);
+    ui.scanFilesStart();
     const sections = await runScan(rootDir);
+    ui.scanFilesDone();
     writeConventions(rootDir, sections);
     updateWatchState(rootDir, { lastScanAt: new Date().toISOString() });
-    log("[clawstrap watch] scan: conventions.md updated");
+    ui.scanDone(sections.naming[0] ?? "");
   };
 
   // Run immediately if overdue
@@ -77,7 +82,7 @@ export async function runDaemon(
   const scanTimer = setInterval(doScan, scanIntervalMs);
   cleanup.push(() => clearInterval(scanTimer));
 
-  log("[clawstrap watch] watching for changes...");
+  ui.showIdle(path.join(rootDir, "tmp", "sessions"));
 
   // Keep process alive
   await new Promise<never>(() => {});
