@@ -85,8 +85,7 @@ program
   .option("--stop", "Stop the running daemon")
   .option("--silent", "Run without output")
   .option("--once", "Run all observers once and exit (no persistent daemon)")
-  .option("--_daemon", undefined)
-  .action(async (options: { stop?: boolean; silent?: boolean; once?: boolean; _daemon?: boolean }) => {
+  .action(async (options: { stop?: boolean; silent?: boolean; once?: boolean }) => {
     await watch(options);
   });
 

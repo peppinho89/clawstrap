@@ -1,5 +1,4 @@
 import path from "node:path";
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { loadWorkspace } from "./load-workspace.js";
 import { isDaemonRunning, writePid, clearPid, readPid } from "./watch/pid.js";
@@ -7,20 +6,14 @@ import { runGitObserver } from "./watch/git.js";
 import { runScan } from "./watch/scan.js";
 import { writeConventions } from "./watch/writers.js";
 import { runDaemon } from "./watch/daemon.js";
+import { createUI } from "./watch/ui.js";
 
 export async function watch(options: {
   stop?: boolean;
   silent?: boolean;
   once?: boolean;
-  _daemon?: boolean;
 }): Promise<void> {
   const { config, rootDir } = loadWorkspace();
-
-  // Internal daemon mode — called by the spawned subprocess
-  if (options._daemon) {
-    await runDaemon(rootDir, config);
-    return;
-  }
 
   // --stop
   if (options.stop) {
@@ -35,51 +28,42 @@ export async function watch(options: {
     return;
   }
 
+  const silent = options.silent ?? config.watch?.silent ?? false;
+  const ui = createUI(silent);
+
   // --once: run all observers once, exit
   if (options.once) {
-    console.log("\nRunning all observers once...\n");
+    ui.gitStart();
     const gitResult = await runGitObserver(rootDir, config.watchState?.lastGitCommit ?? null);
+    ui.gitDone(gitResult ? { entriesWritten: gitResult.entriesWritten, lastCommit: gitResult.lastCommit } : null);
     if (gitResult) {
       persistWatchState(rootDir, { lastGitCommit: gitResult.lastCommit });
-      console.log(`  ✓ git: ${gitResult.entriesWritten} entries`);
     }
+
+    const lastScanAt = config.watchState?.lastScanAt ? new Date(config.watchState.lastScanAt) : null;
+    ui.scanStart(lastScanAt);
+    ui.scanFilesStart();
     const sections = await runScan(rootDir);
+    ui.scanFilesDone();
     writeConventions(rootDir, sections);
     persistWatchState(rootDir, { lastScanAt: new Date().toISOString() });
-    console.log("  ✓ scan: conventions.md updated");
-    console.log("\nDone.\n");
+    ui.scanDone(sections.naming[0] ?? "");
     return;
   }
 
-  // Default: start daemon
+  // Default: run foreground daemon
   if (isDaemonRunning(rootDir)) {
     const pid = readPid(rootDir);
-    console.log(`\nDaemon already running (pid ${pid}). Use --stop to stop it.\n`);
+    console.log(`\nWatch is already running (pid ${pid}). Use --stop to stop it.\n`);
     return;
   }
 
-  // Inject CLAUDE.md watch hook if not already present
   injectWatchHook(rootDir, config);
 
-  // Spawn detached daemon subprocess
-  const self = process.argv[1]; // path to dist/index.cjs
-  const child = spawn(process.execPath, [self, "watch", "--_daemon"], {
-    detached: true,
-    stdio: "ignore",
-    cwd: rootDir,
-  });
-  child.unref();
+  // Write own PID so `--stop` from another terminal can kill this process
+  writePid(rootDir, process.pid);
 
-  if (child.pid) {
-    writePid(rootDir, child.pid);
-    if (!options.silent) {
-      console.log(`\nDaemon started (pid ${child.pid}).`);
-      console.log(`Run 'clawstrap watch --stop' to stop it.\n`);
-    }
-  } else {
-    console.error("\nFailed to start daemon.\n");
-    process.exit(1);
-  }
+  await runDaemon(rootDir, config, ui);
 }
 
 function persistWatchState(rootDir: string, updates: Record<string, string>): void {
