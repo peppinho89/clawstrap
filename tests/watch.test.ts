@@ -996,26 +996,61 @@ describe("inferArchitecturePatterns", () => {
       "it('test', () => {})\n",
       "utf-8"
     );
-    const adapter = { complete: vi.fn(async () => "Always write tests.") };
+    const adapter = { complete: vi.fn().mockResolvedValue("Always write tests.") };
     await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
 
-    if (adapter.complete.mock.calls.length > 0) {
-      const prompt = adapter.complete.mock.calls[0][0] as string;
-      expect(prompt).not.toContain("a.test.ts");
-    }
+    // Adapter must have been called (3 source files exist)
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    const prompt = adapter.complete.mock.calls[0][0] as string;
+    expect(prompt).not.toContain("a.test.ts");
   });
 
   it("includes syntactic findings in the prompt", async () => {
     for (const name of ["a.ts", "b.ts", "c.ts"]) {
       fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
     }
-    const adapter = { complete: vi.fn(async () => "Always use kebab-case.") };
+    const adapter = { complete: vi.fn().mockResolvedValue("Always use kebab-case.") };
     await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
 
-    if (adapter.complete.mock.calls.length > 0) {
-      const prompt = adapter.complete.mock.calls[0][0] as string;
-      expect(prompt).toContain("kebab-case dominant");
-      expect(prompt).toContain("try/catch dominant");
+    // Adapter must have been called (3 source files exist)
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    const prompt = adapter.complete.mock.calls[0][0] as string;
+    expect(prompt).toContain("kebab-case dominant");
+    expect(prompt).toContain("try/catch dominant");
+  });
+
+  it("truncates files longer than 150 lines and appends truncation marker", async () => {
+    const longContent = Array.from({ length: 200 }, (_, i) => `const line${i} = ${i};`).join("\n");
+    fs.writeFileSync(path.join(tempDir, "long.ts"), longContent, "utf-8");
+    for (const name of ["b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
     }
+    const adapter = { complete: vi.fn().mockResolvedValue("Always keep files short.") };
+    await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    const prompt = adapter.complete.mock.calls[0][0] as string;
+    expect(prompt).toContain("// ... truncated");
+    expect(prompt).not.toContain("const line199");
+  });
+
+  it("returns empty array when adapter returns no qualifying rules", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = { complete: vi.fn().mockResolvedValue("Here are some thoughts.\nUse good patterns.\nWrite clean code.") };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(result).toEqual([]);
+    expect(adapter.complete).toHaveBeenCalledOnce();
+  });
+
+  it("uses walkCodeFiles fallback when git is unavailable", async () => {
+    for (const name of ["a.ts", "b.ts", "c.ts"]) {
+      fs.writeFileSync(path.join(tempDir, name), "export const x = 1;\n", "utf-8");
+    }
+    const adapter = { complete: vi.fn().mockResolvedValue("Always prefer composition.") };
+    const result = await inferArchitecturePatterns(tempDir, syntacticSections, adapter);
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    expect(result).toContain("Always prefer composition.");
   });
 });
