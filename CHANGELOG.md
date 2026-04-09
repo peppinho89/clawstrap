@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-04-09
+
+### Added
+
+- `clawstrap watch` now runs in the foreground with a rich, step-by-step terminal UI (modelled on Claude Code output style) — `--silent` is the explicit opt-out for CI/process-manager use
+- Git observer periodic polling while the daemon runs: re-scans git log every N minutes (configurable via `watch.git.pollIntervalMinutes`, default 5) and writes new commits to MEMORY.md incrementally
+- Memory synthesis: periodic living-summary pass on MEMORY.md via LLM adapter — rewrites a `## Living Summary` block at the top of the file so long-running projects stay navigable; opt-in via `watch.synthesis.enabled`, configurable threshold via `watch.synthesis.triggerEveryN`
+- LLM-assisted architecture inference in convention scanner: `clawstrap watch` (and `--once`) now samples recently-changed source files and asks the configured adapter to infer 3–8 imperative architectural rules; written to `CONVENTIONS.md` under `## Architecture & Design Patterns`
+
+### Changed
+
+- `clawstrap watch` no longer detaches — users relying on background behavior should migrate to a process manager (`pm2`, `launchd`, `systemd`) with `--silent`
+- `appendToMemory` now returns the number of entries actually written (after dedup), used by the synthesis counter
+- Version bumped to 1.5.0
+
 ## [1.3.0] - 2026-04-04
 
 ### Added
